@@ -75,7 +75,7 @@ Windows was not tried.
 
 PostToolUse carries `error` and **no** stdout or exit code, so `toolOutputAtAfter` is `false`. **`error` is not
 a failure signal for `run_command`** (verified): an `ls` of a missing directory exits 2 and still arrives with
-`error: ""`. See [A failed command](#a-failed-command).
+`error: ""`. See [A failed command looks like a passing one](#a-failed-command-looks-like-a-passing-one).
 
 ## Policy defaults
 
@@ -128,24 +128,23 @@ reclaimed. Nothing else `session-end` does runs here; in particular the stop-loo
 per-stop reset would make the grind cap unreachable. In an interactive conversation this releases at the end of
 every turn, so another session's write in between is no longer asked about.
 
-### A failed command
+### A failed command looks like a passing one
 
-For a `run_command` PostToolUse whose `error` is empty, the adapter reads the exit code from the transcript: the
-JSONL line whose `step_index` equals the payload's `stepIdx` has a `content` containing
-`The command exited with code <N>.` (verified, for both `0` and non-zero). Only the last 512 KiB of the file are
-read, inside the adapter; `transcriptPath` is still not passed to the core.
+Verified against the real binary, and **not fixable from the hook today**:
 
-| Exit code read | Event |
-| --- | --- |
-| `0` | `shell.after` — the command counts as run and passed |
-| anything else | `tool.failure` |
-| unreadable: no file, no line for the step, no sentence, no `stepIdx` | `tool.after` **without `command`** |
+- PostToolUse carries `error: ""` for a `run_command` that exits non-zero (an `ls` of a missing directory, exit 2).
+- The transcript does not hold the step's result when PostToolUse fires: only earlier steps are there, and waiting
+  3 s inside the hook does not make it appear — agy writes the step after every hook has returned.
 
-The last row is the decision: an unknown outcome proves nothing. A rule's `command(…)` proof is only recorded
-from a `shell.after`/`tool.after` that carries the command, so a run whose result cannot be read never satisfies
-it — and nothing throws or blocks, because the tool has already run. **Not verified:** whether PostToolUse can fire
-before its step is written to the transcript. If it can, those commands land in the unknown row, and a proof needs
-a rerun.
+So a `run_command` with an empty `error` is a `shell.after` carrying its command, and **a `command(…)` proof can
+be satisfied by a red command on agy**. On Claude the same failure is a PostToolUseFailure and counts for nothing.
+The existing mitigation is the stop-time grind, which runs lint and tests itself and checks the real result.
+Reading the exit code from the transcript was tried and reverted: the step is never there yet, so no command,
+passing or not, ever counted, and a rule proven by a command could never be satisfied.
+
+The way forward, not implemented: reconcile on the **next** event (a `PreInvocation` with `invocationNum > 0`, a
+`PreToolUse`, or `Stop`), when the previous step is already in the transcript, and revoke the proof if the step
+exited non-zero. That needs new core support — there is no proof revocation today.
 
 ### Where a command's relative paths resolve
 
@@ -169,8 +168,7 @@ only; `TargetFile`/`AbsolutePath` → `filePath`; `write_to_file` → `toolName:
 `call_mcp_tool` →
 `toolName: "mcp__<ServerName>__<ToolName>"` with `Arguments` as `toolInput`; `modelName` → `model`;
 `conversationId` → `sessionKey` (`antigravity-<id>`); `workspacePaths[0]` → `projectDir`. `transcriptPath` is
-not surfaced — the only transcript reader in the entrypoints parses another host's format; the adapter reads it
-itself, only for a `run_command` exit code.
+not surfaced — the only transcript reader in the entrypoints parses another host's format.
 
 ## Wiring target
 

@@ -1,6 +1,5 @@
 import type { HarnessEvent, HarnessEventKind } from "../../contracts/index.ts";
 import { sanitizeSegment } from "../../platform/sanitize.ts";
-import { readCommandExitCode } from "./antigravity.transcript.ts";
 
 /**
  * The variable the wiring sets, in the hook's own command text, to name the event being delivered.
@@ -108,6 +107,13 @@ function toolCallOf(raw: Record<string, unknown>): ToolCall {
   return { name: asString(call?.name), args: asRecord(call?.args) };
 }
 
+/**
+ * hazard: for `run_command` this is not a failure signal — verified, a command that exits 2 still arrives with
+ * `error: ""`, and the transcript holds no line for the step until every hook has returned. So a red command reads
+ * as a success here, and a `command(…)` proof can be satisfied by one; the stop-time gates are what check the
+ * result. Treating the unreadable outcome as unproven was tried and made no command ever count
+ * ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ */
 function failed(raw: Record<string, unknown>): boolean {
   const error = asString(raw.error);
   return error !== undefined && error.length > 0;
@@ -264,12 +270,10 @@ export function antigravityToEvent(raw: Record<string, unknown>): HarnessEvent |
     return null;
   }
   const call = toolCallOf(raw);
-  const mapped = eventKindFor(hookName, raw, call);
-  if (!mapped) {
+  const eventKind = eventKindFor(hookName, raw, call);
+  if (!eventKind) {
     return null;
   }
-  const outcome = mapped === "shell.after" ? commandOutcome(raw) : "passed";
-  const eventKind = outcome === "passed" ? mapped : outcome === "failed" ? "tool.failure" : "tool.after";
 
   const event: HarnessEvent = {
     provider: "antigravity",
@@ -283,30 +287,5 @@ export function antigravityToEvent(raw: Record<string, unknown>): HarnessEvent |
     event.model = model;
   }
   fillByKind(event, raw, call);
-  if (outcome === "unknown") {
-    // invariant: without its command an after-event is observed by no rule, so an unknown outcome proves nothing.
-    delete event.command;
-  }
   return event;
-}
-
-/**
- * Whether a `run_command` that PostToolUse reports with an empty `error` actually succeeded.
- *
- * hazard: verified against the real binary — a command that exits non-zero still arrives with `error: ""`. Taken
- * as a success, a red `pytest` satisfied a `command(pytest)` proof. The exit code is read from the step's
- * transcript line; when it cannot be read the answer is `unknown`, which proves nothing and blocks nothing — the
- * tool already ran ([/decisions/ad-146.md](/decisions/ad-146.md)).
- */
-function commandOutcome(raw: Record<string, unknown>): "passed" | "failed" | "unknown" {
-  const transcriptPath = asString(raw.transcriptPath);
-  const stepIdx = raw.stepIdx;
-  if (!transcriptPath || typeof stepIdx !== "number") {
-    return "unknown";
-  }
-  const exitCode = readCommandExitCode(transcriptPath, stepIdx);
-  if (exitCode === null) {
-    return "unknown";
-  }
-  return exitCode === 0 ? "passed" : "failed";
 }

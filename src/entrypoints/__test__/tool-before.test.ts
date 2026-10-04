@@ -813,6 +813,113 @@ test("a Claude Edit of a workspace's .agents/hooks.json is denied too — the fi
   }
 });
 
+/**
+ * The reviewer's probes: agy runs each command in the `Cwd` the call names, so a relative path resolved against the
+ * project root pointed somewhere the shell never writes — and both of these were allowed.
+ */
+test("an agy run_command whose Cwd is the global hooks directory cannot overwrite hooks.json", async () => {
+  const root = tempRoot();
+  try {
+    const target = providerNamed("antigravity").wiringTargets()[0] ?? "";
+    const outcome = await runHandler(
+      toolBeforeHandler,
+      stdinOf(agyTool(root, "run_command", { CommandLine: "echo '{}' > hooks.json", Cwd: dirname(target) })),
+    );
+    assert.equal(outcome.decision.kind, "deny");
+    assert.match(outcome.decision.kind === "deny" ? outcome.decision.reason : "", /rule=wiring-tamper/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an agy run_command from a subdirectory cannot climb into the project's policy file", async () => {
+  const root = tempRoot();
+  try {
+    const outcome = await runHandler(
+      toolBeforeHandler,
+      stdinOf(
+        agyTool(root, "run_command", {
+          CommandLine: "echo x > ../.tlc/harness/config.json",
+          Cwd: join(root, "sub"),
+        }),
+      ),
+    );
+    assert.equal(outcome.decision.kind, "deny");
+    assert.match(
+      outcome.decision.kind === "deny" ? outcome.decision.reason : "",
+      /rule=policy-surface-write/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// invariant: Cursor's and Claude's `cwd` is not a per-call argument the agent chooses, and a worktree outside the
+// project is an ordinary place for it to be. Their relative paths keep resolving against the project, so a
+// relative `rm` there is not suddenly an outside-project destruction.
+test("a Cursor shell with a cwd outside the project keeps resolving relative paths against the project", async () => {
+  const root = tempRoot();
+  const elsewhere = tempRoot();
+  try {
+    const outcome = await runHandler(
+      toolBeforeHandler,
+      stdinOf(
+        JSON.stringify({
+          hook_event_name: "beforeShellExecution",
+          workspace_roots: [root],
+          conversation_id: "conv-1",
+          command: "rm build/x",
+          cwd: elsewhere,
+        }),
+      ),
+    );
+    assert.doesNotMatch(
+      outcome.decision.kind === "deny" ? outcome.decision.reason : "",
+      /rule=outside-project-destruction/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(elsewhere, { recursive: true, force: true });
+  }
+});
+
+test("a Claude Bash with a cwd outside the project keeps resolving relative paths against the project", async () => {
+  const root = tempRoot();
+  const elsewhere = tempRoot();
+  const previous = process.env.CLAUDE_PROJECT_DIR;
+  process.env.CLAUDE_PROJECT_DIR = root;
+  try {
+    const outcome = await runHandler(toolBeforeHandler, stdinOf(claudeShell(elsewhere, "rm build/x")));
+    assert.doesNotMatch(
+      outcome.decision.kind === "deny" ? outcome.decision.reason : "",
+      /rule=outside-project-destruction/,
+    );
+  } finally {
+    if (previous === undefined) {
+      delete process.env.CLAUDE_PROJECT_DIR;
+    } else {
+      process.env.CLAUDE_PROJECT_DIR = previous;
+    }
+    rmSync(root, { recursive: true, force: true });
+    rmSync(elsewhere, { recursive: true, force: true });
+  }
+});
+
+test("an agy write through an unmapped tool carrying TargetFile is denied on the global hooks file", async () => {
+  const root = tempRoot();
+  try {
+    const target = providerNamed("antigravity").wiringTargets()[0];
+    const outcome = await runHandler(
+      toolBeforeHandler,
+      stdinOf(agyTool(root, "multi_replace_file_content", { TargetFile: target, ReplacementChunks: [] })),
+    );
+    assert.equal(outcome.decision.kind, "deny");
+    assert.match(outcome.decision.kind === "deny" ? outcome.decision.reason : "", /rule=wiring-tamper/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("an agy write_to_file of an ordinary project file is not refused by the floor", async () => {
   const root = tempRoot();
   try {

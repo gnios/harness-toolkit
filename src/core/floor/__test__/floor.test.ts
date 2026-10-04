@@ -422,3 +422,37 @@ test("AC5 a local search for the literal address is allowed", () => {
     assert.equal(evaluateFloor({ projectDir: "/repo", command }).kind, "allow", command);
   }
 });
+
+/**
+ * commandCwd — a host that runs each command in a directory named by the call itself. Relative words resolve
+ * there, because that is where the shell will resolve them; the project boundary stays `projectDir`.
+ */
+function shellIn(commandCwd: string | undefined, command: string, protectedPaths: readonly string[] = []) {
+  return withEnv({ HOME, USERPROFILE: HOME }, () =>
+    evaluateFloor({ projectDir: PROJECT, command, commandCwd, protectedPaths }),
+  );
+}
+
+test("a relative redirect into a wiring target, run from the target's own directory, is denied", () => {
+  const decision = shellIn(join(HOME, ".editor-x"), "echo '{}' > settings.json", [WIRING_TARGET]);
+  assert.equal(ruleOf(decision), "wiring-tamper");
+});
+
+test("a relative redirect that climbs from a subdirectory into the policy surface is denied", () => {
+  const decision = shellIn(join(PROJECT, "sub"), "echo x > ../.tlc/harness/config.json");
+  assert.equal(ruleOf(decision), "policy-surface-write");
+});
+
+test("a relative destructive target is resolved in the command's directory, not the project root", () => {
+  assert.equal(ruleOf(shellIn(join(HOME, "elsewhere"), "rm build/x")), "outside-project-destruction");
+  assert.equal(shellIn(join(PROJECT, "sub"), "rm build/x").kind, "allow");
+});
+
+test("a relative command directory is itself resolved against the project", () => {
+  assert.equal(ruleOf(shellIn("sub", "echo x > ../.tlc/harness/config.json")), "policy-surface-write");
+});
+
+test("without a command directory, relative words still resolve against the project", () => {
+  assert.equal(shellIn(undefined, "echo '{}' > settings.json", [WIRING_TARGET]).kind, "allow");
+  assert.equal(shellIn(undefined, "rm build/x").kind, "allow");
+});

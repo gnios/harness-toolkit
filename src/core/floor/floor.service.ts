@@ -21,6 +21,11 @@ export type FloorInput = {
   command?: string | undefined;
   isReadEvent?: boolean | undefined;
   protectedPaths?: readonly string[] | undefined;
+  /**
+   * Where the command's relative words resolve, when the call names its own directory. The project boundary is
+   * still `projectDir` — this moves what a path means, never what counts as inside.
+   */
+  commandCwd?: string | undefined;
 };
 
 const DESTRUCTIVE_VERBS = new Set(["dd", "rm", "rmdir", "shred", "truncate"]);
@@ -173,6 +178,7 @@ function checkShell(input: FloorInput): Decision {
 
   const segments = tokenizeShell(command);
   const protectedPaths = input.protectedPaths ?? [];
+  const base = input.commandCwd ? resolveTarget(input.projectDir, input.commandCwd) : input.projectDir;
 
   // invariant: asked before the rest. A fetched program satisfies every other rule by containing nothing this
   // gate can read, so checking the wrapper first and the payload never is the order that let it through.
@@ -236,7 +242,7 @@ function checkShell(input: FloorInput): Decision {
     }
 
     for (const word of targets) {
-      const resolved = resolveTarget(input.projectDir, word.text);
+      const resolved = resolveTarget(base, word.text);
       // why: a destructive verb targeting a provider's wiring path is the same tampering the redirect and
       // in-place-edit cases already name — attributing it to `outside-project-destruction` instead would be
       // technically safe (the file still cannot be destroyed) but would hide which rule actually did the work.
@@ -259,7 +265,7 @@ function checkShell(input: FloorInput): Decision {
 
   // hazard: the guard that used to defend this surface keyed off tool names, so a single shell line went
   // around it. The rule belongs here, where the decision is made before any policy is read.
-  const surface = checkPolicySurface(input.projectDir, command, segments, protectedPaths);
+  const surface = checkPolicySurface(input.projectDir, command, segments, protectedPaths, base);
   if (surface.kind === "deny") {
     // invariant: the remedy comes from the branch that denied, so a read refusal names how to read and a write
     // refusal names who may write. One fixed tail on both handed write advice to an agent trying to read
@@ -271,15 +277,17 @@ function checkShell(input: FloorInput): Decision {
     // whether the harness's own surface — with no wiring targets in the mix — would have denied this on its own.
     // If it would not, the only thing that changed the answer is a provider's wiring target.
     const harnessOnly =
-      protectedPaths.length === 0 ? surface : checkPolicySurface(input.projectDir, command, segments, []);
+      protectedPaths.length === 0
+        ? surface
+        : checkPolicySurface(input.projectDir, command, segments, [], base);
     const rule: FloorRule = harnessOnly.kind === "deny" ? "policy-surface-write" : "wiring-tamper";
     return denial(rule, `${surface.detail} ${remedy}`, surface.note);
   }
 
-  return checkShellSecrets(segments, input.projectDir);
+  return checkShellSecrets(segments, base);
 }
 
-function checkShellSecrets(segments: ShellSegment[], projectDir: string): Decision {
+function checkShellSecrets(segments: ShellSegment[], base: string): Decision {
   for (const segment of segments) {
     const head = verbOf(segment.words);
     if (!head) {
@@ -303,7 +311,7 @@ function checkShellSecrets(segments: ShellSegment[], projectDir: string): Decisi
       if (word.unresolved) {
         continue;
       }
-      const resolved = resolveTarget(projectDir, word.text);
+      const resolved = resolveTarget(base, word.text);
       if (isSecretPath(resolved)) {
         return denial(
           "secret-access",

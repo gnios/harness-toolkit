@@ -1,0 +1,4 @@
+{"step_index": 1, "source": "USER", "type": "USER_INPUT", "status": "DONE", "content": "Execute: ls /diretorio-que-nao-existe-xyz", "created_at": "2026-10-04T12:00:01Z"}
+{"step_index": 2, "source": "MODEL", "type": "GENERIC", "status": "DONE", "content": "Planning the command.", "created_at": "2026-10-04T12:00:02Z"}
+{"step_index": 4, "source": "MODEL", "type": "GENERIC", "status": "DONE", "content": "Created At: x\nThe command is still running.\n", "created_at": "2026-10-04T12:00:04Z"}
+{not json

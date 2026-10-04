@@ -1,0 +1,20 @@
+{
+  "artifactDirectoryPath": "/Users/dev/.gemini/antigravity-cli/brain/3520b054-a345-44f5-bfcd-305ebac54fe3",
+  "conversationId": "3520b054-a345-44f5-bfcd-305ebac54fe3",
+  "modelName": "gemini-3.8-flash-medium",
+  "stepIdx": 8,
+  "toolCall": {
+    "args": {
+      "Arguments": {},
+      "ServerName": "gnios",
+      "ToolName": "gnios_status",
+      "toolAction": "Checking status",
+      "toolSummary": "Gnios status"
+    },
+    "name": "call_mcp_tool"
+  },
+  "transcriptPath": "/Users/dev/.gemini/antigravity-cli/brain/3520b054-a345-44f5-bfcd-305ebac54fe3/.system_generated/logs/transcript_full.jsonl",
+  "workspacePaths": [
+    "/private/tmp/agyws"
+  ]
+}

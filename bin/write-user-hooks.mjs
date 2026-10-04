@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { applyAntigravityWiring } from "../src/providers/antigravity/antigravity.wiring.ts";
 import { applyClaudeWiring } from "../src/providers/claude/claude.wiring.ts";
 import { providers } from "../src/providers/index.ts";
 
@@ -58,11 +59,22 @@ export function applyCursorWiring(wiring, { force = false } = {}) {
   return { status: "written", target: targetPath };
 }
 
+// hazard: this was two-way, and every strategy that was not `replace` fell through to the Claude merge — so a
+// third host's file would have been rewritten into another host's schema on the next update. Each strategy names
+// the writer that understands it ([/decisions/ad-146.md](/decisions/ad-146.md)).
+function mergeWith(wiring) {
+  if (wiring.strategy === "named-merge") {
+    const result = applyAntigravityWiring(wiring.target, wiring.entries);
+    return result.ok ? { ok: true, changed: result.changed } : result;
+  }
+  return applyClaudeWiring(wiring.target, wiring.entries);
+}
+
 export function applyProviderWiring(wiring, { force = false } = {}) {
   if (wiring.strategy === "replace") {
     return applyCursorWiring(wiring, { force });
   }
-  const result = applyClaudeWiring(wiring.target, wiring.entries);
+  const result = mergeWith(wiring);
   if (!result.ok) {
     return { status: "failed", target: wiring.target, reason: result.error };
   }

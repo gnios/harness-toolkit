@@ -1,0 +1,22 @@
+{
+  "artifactDirectoryPath": "/Users/dev/.gemini/antigravity-cli/brain/3520b054-a345-44f5-bfcd-305ebac54fe3",
+  "conversationId": "3520b054-a345-44f5-bfcd-305ebac54fe3",
+  "modelName": "gemini-3.8-flash-medium",
+  "stepIdx": 4,
+  "toolCall": {
+    "args": {
+      "BypassSandbox": false,
+      "CommandLine": "echo \"oi\" > hello.txt",
+      "Cwd": "/private/tmp/agyws",
+      "WaitMsBeforeAsync": 5000,
+      "toolAction": "Creating file",
+      "toolSummary": "Create hello.txt"
+    },
+    "name": "run_command"
+  },
+  "transcriptPath": "/Users/dev/.gemini/antigravity-cli/brain/3520b054-a345-44f5-bfcd-305ebac54fe3/.system_generated/logs/transcript_full.jsonl",
+  "workspacePaths": [
+    "/private/tmp/agyws"
+  ],
+  "error": ""
+}

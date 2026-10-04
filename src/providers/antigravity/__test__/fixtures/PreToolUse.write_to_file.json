@@ -1,0 +1,21 @@
+{
+  "artifactDirectoryPath": "/Users/dev/.gemini/antigravity-cli/brain/3520b054-a345-44f5-bfcd-305ebac54fe3",
+  "conversationId": "3520b054-a345-44f5-bfcd-305ebac54fe3",
+  "modelName": "gemini-3.8-flash-medium",
+  "stepIdx": 2,
+  "toolCall": {
+    "args": {
+      "CodeContent": "oi",
+      "Description": "Criando o arquivo hello.txt com 'oi'",
+      "Overwrite": true,
+      "TargetFile": "/private/tmp/agyws/hello.txt",
+      "toolAction": "Creating file",
+      "toolSummary": "Create hello.txt"
+    },
+    "name": "write_to_file"
+  },
+  "transcriptPath": "/Users/dev/.gemini/antigravity-cli/brain/3520b054-a345-44f5-bfcd-305ebac54fe3/.system_generated/logs/transcript_full.jsonl",
+  "workspacePaths": [
+    "/private/tmp/agyws"
+  ]
+}

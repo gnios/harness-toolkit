@@ -6,6 +6,10 @@ Each entry is an architectural decision record: what changed, why, what was refu
 A **Needs your action** line is a change `tlc harness doctor` cannot detect for you; everything else
 doctor reports against your own configuration.
 
+## Unreleased
+
+- **AD-146** — Antigravity CLI is a provider, built only from what agy 1.2.16 was observed to do
+
 ## v0.16.2
 
 - **AD-145** — a session's last real shell cwd is recalled wherever the host reports none

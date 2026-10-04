@@ -17,6 +17,12 @@ export type ProviderPort = {
   toEvent(raw: Record<string, unknown>): HarnessEvent | null;
   render(decision: Decision, event: HarnessEvent): Rendered;
   wiring(runtime: RuntimePaths): ProviderWiring;
-  wiringTargets(): string[];
+  /**
+   * Every file this provider reads its hook registration from, for the floor to protect.
+   *
+   * why `projectDir`: a host can load hooks from the workspace as well as from the user's home, and only the
+   * caller knows which workspace. A provider with no workspace-level file ignores it.
+   */
+  wiringTargets(projectDir?: string): string[];
   lessonsView(root: string): string | null;
 };

@@ -117,7 +117,10 @@ export function assertSatisfiesContract(provider: ProviderPort): void {
 
   const wiring = provider.wiring({ launcherPath: "/tmp/tlc-exec.mjs" });
   assert.ok(wiring.target.length > 0, "wiring target is non-empty");
-  assert.ok(wiring.strategy === "replace" || wiring.strategy === "merge", "strategy is replace or merge");
+  assert.ok(
+    wiring.strategy === "replace" || wiring.strategy === "merge" || wiring.strategy === "named-merge",
+    "strategy is replace, merge or named-merge",
+  );
 
   const wiringTargets = provider.wiringTargets();
   assert.ok(Array.isArray(wiringTargets), `${provider.name}.wiringTargets() is an array`);

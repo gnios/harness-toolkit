@@ -75,6 +75,13 @@ export type HarnessEvent = {
   spawnAgentLabel?: string;
   status?: "completed" | "aborted" | "error";
   loopCount?: number;
+  /**
+   * Set on a `stop` from a host that never reports the end of a session. Its session-scoped state — the file claims
+   * other sessions are asked about — would otherwise outlive the session by the full stale window, refusing the
+   * next session's writes to the same files. Absent means the host reports its session end on its own
+   * ([/decisions/ad-146.md](/decisions/ad-146.md)).
+   */
+  sessionEndUnreported?: boolean;
   /** Provider's own permission posture, when it exposes one. Absent means unknown, not permissive. */
   permissionMode?: string;
   contextUsagePercent?: number;

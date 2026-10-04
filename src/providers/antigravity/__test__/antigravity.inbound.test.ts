@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 import {
   ANTIGRAVITY_EVENT_ENV,
@@ -227,55 +228,49 @@ test("PreToolUse of a tool with no fan-out is a generic tool.before carrying the
   assert.deepEqual(event.toolInput, { query: "x" });
 });
 
-function postRunCommand(transcript: string): Record<string, unknown> {
-  return { ...fixture("PostToolUse.run_command"), transcriptPath: join(FIXTURES, transcript) };
+/**
+ * The transcript as it really is when PostToolUse fires: verified against agy, the step whose result the hook
+ * reports is written only after the hooks finish — not even after waiting 3 s inside the hook. Only earlier
+ * steps are there.
+ */
+function transcriptWithoutTheStep(): string {
+  const dir = mkdtempSync(join(tmpdir(), "agy-transcript-"));
+  const path = join(dir, "transcript_full.jsonl");
+  const lines = [0, 1].map((step) =>
+    JSON.stringify({ step_index: step, source: "MODEL", type: "GENERIC", status: "DONE", content: "x" }),
+  );
+  writeFileSync(path, `${lines.join("\n")}\n`);
+  return path;
 }
 
-test("PostToolUse run_command whose transcript step exited 0 fans out to shell.after", () => {
+test("PostToolUse run_command with an empty error fans out to shell.after", () => {
   asHook("PostToolUse");
-  const event = antigravityToEvent(postRunCommand("transcript.exit0.jsonl"));
+  const event = antigravityToEvent(fixture("PostToolUse.run_command"));
   assert.ok(event);
   assert.equal(event.event, "shell.after");
   assert.equal(event.command, 'echo "oi" > hello.txt');
   // why: the host reports cwd per command, but only the before-half records it — the same rule the other adapters follow.
   assert.equal(event.cwd, undefined);
   assert.equal(event.toolOutput, undefined);
-  assert.equal(event.transcriptPath, undefined);
-});
-
-// why: verified against the real binary — `ls` of a missing directory exits 2 and PostToolUse still carries
-// `error: ""`. The exit code exists only in the transcript line for the step.
-test("PostToolUse run_command whose transcript step exited non-zero is tool.failure", () => {
-  asHook("PostToolUse");
-  const event = antigravityToEvent(postRunCommand("transcript.exit1.jsonl"));
-  assert.ok(event);
-  assert.equal(event.event, "tool.failure");
-  assert.equal(event.command, 'echo "oi" > hello.txt');
 });
 
 /**
- * invariant: an unknown outcome is never a proof. The event stays a plain `tool.after` with no `command`, so the
- * rules rail records nothing for it — and nothing throws or blocks, because the tool already ran.
+ * hazard: reading the exit code from the transcript made every successful command unproven, because the step is
+ * never there yet — measured: a passing `ruff format --check` was then reported missing at push, and a context
+ * rule proven by a command could never be satisfied ([/decisions/ad-146.md](/decisions/ad-146.md)).
  */
-test("PostToolUse run_command with no readable exit code is an after-event that proves nothing", () => {
+test("an empty-error run_command carries its command, whatever the transcript holds at that moment", () => {
   asHook("PostToolUse");
-  for (const transcript of [
-    "transcript.no-step.jsonl",
-    "transcript.no-pattern.jsonl",
-    "does-not-exist.jsonl",
-  ]) {
-    const event = antigravityToEvent(postRunCommand(transcript));
-    assert.ok(event, transcript);
-    assert.equal(event.event, "tool.after", transcript);
-    assert.equal(event.command, undefined, transcript);
+  const transcriptPath = transcriptWithoutTheStep();
+  try {
+    const event = antigravityToEvent({ ...fixture("PostToolUse.run_command"), transcriptPath });
+    assert.ok(event);
+    assert.equal(event.event, "shell.after");
+    assert.equal(event.command, 'echo "oi" > hello.txt');
+    assert.equal(event.transcriptPath, undefined);
+  } finally {
+    rmSync(dirname(transcriptPath), { recursive: true, force: true });
   }
-  const noStep = { ...postRunCommand("transcript.exit1.jsonl") };
-  delete noStep.stepIdx;
-  assert.equal(antigravityToEvent(noStep)?.event, "tool.after");
-  assert.equal(
-    antigravityToEvent({ ...fixture("PostToolUse.run_command"), transcriptPath: 7 })?.event,
-    "tool.after",
-  );
 });
 
 test("PostToolUse with a non-empty error is tool.failure, whatever the tool", () => {
@@ -333,7 +328,7 @@ test("the transcript path is not surfaced", () => {
 
 test("without the variable, tool and stop payloads are recognized by their own shape", () => {
   assert.equal(antigravityToEvent(fixture("PreToolUse.run_command"))?.event, "shell.before");
-  assert.equal(antigravityToEvent(postRunCommand("transcript.exit0.jsonl"))?.event, "shell.after");
+  assert.equal(antigravityToEvent(fixture("PostToolUse.run_command"))?.event, "shell.after");
   assert.equal(antigravityToEvent(fixture("Stop"))?.event, "stop");
 });
 

@@ -1,3 +1,0 @@
-{"step_index": 1, "source": "USER", "type": "USER_INPUT", "status": "DONE", "content": "Execute: ls /diretorio-que-nao-existe-xyz", "created_at": "2026-10-04T12:00:01Z"}
-{"step_index": 2, "source": "MODEL", "type": "GENERIC", "status": "DONE", "content": "Planning the command.", "created_at": "2026-10-04T12:00:02Z"}
-{"step_index": 4, "source": "MODEL", "type": "GENERIC", "status": "DONE", "content": "Created At: 2026-10-04T12:00:04Z\nCompleted At: 2026-10-04T12:00:04Z\n\nThe command exited with code 0.\nOutput:\noi\r\n\n", "created_at": "2026-10-04T12:00:04Z"}

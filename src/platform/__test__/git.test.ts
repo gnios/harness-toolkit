@@ -149,6 +149,15 @@ describe("filterCodeTargets", () => {
     assert.deepEqual(result, ["src/app.ts", "apps/web/index.tsx"]);
   });
 
+  // why: a C# change was never a code target, so the stop-time grind never fired in a .NET repository.
+  test("keeps a C# source file, and not a .csproj or a .cshtml", () => {
+    const result = filterCodeTargets(
+      ["src/Api/Program.cs", "src/Api/Api.csproj", "src/Api/Views/Index.cshtml"],
+      ["src"],
+    );
+    assert.deepEqual(result, ["src/Api/Program.cs"]);
+  });
+
   test("excludes files not under any code path prefix", () => {
     const result = filterCodeTargets(["docs/readme.ts", "scripts/deploy.ts"], ["src", "apps"]);
     assert.deepEqual(result, []);

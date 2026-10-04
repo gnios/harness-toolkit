@@ -264,7 +264,7 @@ export function filterCodeTargets(relativePaths: string[], codePaths: string[]):
     if (!isUnderPrefixes(path, codePaths)) {
       return false;
     }
-    return /\.(ts|tsx|js|jsx|json|mjs|cjs|py|go|rs)$/.test(path);
+    return /\.(ts|tsx|js|jsx|json|mjs|cjs|py|go|rs|cs)$/.test(path);
   });
 }
 

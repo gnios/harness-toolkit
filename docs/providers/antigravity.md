@@ -73,8 +73,9 @@ Windows was not tried.
 | Context injection (PreInvocation or any event) | not verified — every `contextAt*` is `false` |
 | Input/output rewrite | not verified — declared unsupported |
 
-PostToolUse carries `error` (an empty string on success) and **no** stdout or exit code, so
-`toolOutputAtAfter` is `false`.
+PostToolUse carries `error` and **no** stdout or exit code, so `toolOutputAtAfter` is `false`. **`error` is not
+a failure signal for `run_command`** (verified): an `ls` of a missing directory exits 2 and still arrives with
+`error: ""`. See [A failed command](#a-failed-command).
 
 ## Policy defaults
 
@@ -127,15 +128,49 @@ reclaimed. Nothing else `session-end` does runs here; in particular the stop-loo
 per-stop reset would make the grind cap unreachable. In an interactive conversation this releases at the end of
 every turn, so another session's write in between is no longer asked about.
 
-Fields: `toolCall.args.CommandLine` → `command`; `run_command`'s `Cwd` → `cwd` on `shell.before` only;
-`TargetFile`/`AbsolutePath` → `filePath`; `write_to_file` → `toolName: "Write"` with `CodeContent` as
-`proposedContent`; `replace_file_content` → `toolName: "Edit"`; `call_mcp_tool` →
+### A failed command
+
+For a `run_command` PostToolUse whose `error` is empty, the adapter reads the exit code from the transcript: the
+JSONL line whose `step_index` equals the payload's `stepIdx` has a `content` containing
+`The command exited with code <N>.` (verified, for both `0` and non-zero). Only the last 512 KiB of the file are
+read, inside the adapter; `transcriptPath` is still not passed to the core.
+
+| Exit code read | Event |
+| --- | --- |
+| `0` | `shell.after` — the command counts as run and passed |
+| anything else | `tool.failure` |
+| unreadable: no file, no line for the step, no sentence, no `stepIdx` | `tool.after` **without `command`** |
+
+The last row is the decision: an unknown outcome proves nothing. A rule's `command(…)` proof is only recorded
+from a `shell.after`/`tool.after` that carries the command, so a run whose result cannot be read never satisfies
+it — and nothing throws or blocks, because the tool has already run. **Not verified:** whether PostToolUse can fire
+before its step is written to the transcript. If it can, those commands land in the unknown row, and a proof needs
+a rerun.
+
+### Where a command's relative paths resolve
+
+`run_command` carries `Cwd`, a directory the agent chooses per call. The adapter sets it as
+`HarnessEvent.commandCwd`, and the floor resolves the command's relative words there; the project boundary is
+still `projectDir`. Without it, `echo '{}' > hooks.json` with `Cwd` set to `~/.gemini/config` and a climb from a
+subdirectory into the project's policy file were both allowed. Claude's and Cursor's `cwd` is not a per-call
+argument, so they do not set `commandCwd` and keep resolving against the project.
+
+### An edit tool with an unknown name
+
+Any tool other than the mapped ones that carries a string `TargetFile` is translated to `Edit`, so the floor's
+`wiring-tamper` rule and operator rules on `tool(Edit)` see it as a write — measured: `multi_replace_file_content`
+on the global hooks file was allowed before. `view_file` (which uses `AbsolutePath`) and tools without
+`TargetFile` keep their own names. **Not verified:** the real names of agy's edit tools —
+`replace_file_content` and `multi_replace_file_content` were never captured.
+
+Fields: `toolCall.args.CommandLine` → `command`; `run_command`'s `Cwd` → `cwd` and `commandCwd` on `shell.before`
+only; `TargetFile`/`AbsolutePath` → `filePath`; `write_to_file` → `toolName: "Write"` with `CodeContent` as
+`proposedContent`; `replace_file_content`, and any unmapped tool with `TargetFile`, → `toolName: "Edit"`;
+`call_mcp_tool` →
 `toolName: "mcp__<ServerName>__<ToolName>"` with `Arguments` as `toolInput`; `modelName` → `model`;
 `conversationId` → `sessionKey` (`antigravity-<id>`); `workspacePaths[0]` → `projectDir`. `transcriptPath` is
-not surfaced — the only transcript reader parses another host's format.
-
-**Not verified:** `replace_file_content` was never captured; its name and its `TargetFile` field are assumed from
-`write_to_file`.
+not surfaced — the only transcript reader in the entrypoints parses another host's format; the adapter reads it
+itself, only for a `run_command` exit code.
 
 ## Wiring target
 

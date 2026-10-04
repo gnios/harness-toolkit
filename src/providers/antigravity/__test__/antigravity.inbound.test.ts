@@ -156,6 +156,38 @@ test("PreToolUse replace_file_content (unverified shape) is an Edit at tool.befo
   assert.equal(event.proposedOldContent, undefined);
 });
 
+// why: the edit tools were never all captured. Any tool that names a TargetFile is treated as a write, so a
+// differently named edit tool cannot reach a protected path as an unknown, unchecked tool.
+test("an unmapped tool carrying TargetFile is an Edit", () => {
+  asHook("PreToolUse");
+  const event = antigravityToEvent(
+    withToolCall("multi_replace_file_content", { TargetFile: "/repo/a.ts", ReplacementChunks: [] }),
+  );
+  assert.ok(event);
+  assert.equal(event.event, "tool.before");
+  assert.equal(event.toolName, "Edit");
+  assert.equal(event.filePath, "/repo/a.ts");
+});
+
+test("an unmapped tool with no TargetFile keeps its own name", () => {
+  asHook("PreToolUse");
+  const event = antigravityToEvent(withToolCall("list_dir", { DirectoryPath: "/repo" }));
+  assert.equal(event?.toolName, "list_dir");
+});
+
+test("view_file is never an Edit, and write_to_file stays a Write", () => {
+  asHook("PreToolUse");
+  const view = antigravityToEvent(withToolCall("view_file", { AbsolutePath: "/a", TargetFile: "/a" }));
+  assert.equal(view?.event, "read.before");
+  assert.equal(view?.toolName, undefined);
+  assert.equal(antigravityToEvent(fixture("PreToolUse.write_to_file"))?.toolName, "Write");
+});
+
+test("run_command's Cwd is the command's own directory", () => {
+  asHook("PreToolUse");
+  assert.equal(antigravityToEvent(fixture("PreToolUse.run_command"))?.commandCwd, WORKSPACE);
+});
+
 test("PreToolUse view_file fans out to read.before with the absolute path", () => {
   asHook("PreToolUse");
   const event = antigravityToEvent(fixture("PreToolUse.view_file"));
@@ -195,15 +227,55 @@ test("PreToolUse of a tool with no fan-out is a generic tool.before carrying the
   assert.deepEqual(event.toolInput, { query: "x" });
 });
 
-test("PostToolUse run_command with an empty error fans out to shell.after", () => {
+function postRunCommand(transcript: string): Record<string, unknown> {
+  return { ...fixture("PostToolUse.run_command"), transcriptPath: join(FIXTURES, transcript) };
+}
+
+test("PostToolUse run_command whose transcript step exited 0 fans out to shell.after", () => {
   asHook("PostToolUse");
-  const event = antigravityToEvent(fixture("PostToolUse.run_command"));
+  const event = antigravityToEvent(postRunCommand("transcript.exit0.jsonl"));
   assert.ok(event);
   assert.equal(event.event, "shell.after");
   assert.equal(event.command, 'echo "oi" > hello.txt');
   // why: the host reports cwd per command, but only the before-half records it — the same rule the other adapters follow.
   assert.equal(event.cwd, undefined);
   assert.equal(event.toolOutput, undefined);
+  assert.equal(event.transcriptPath, undefined);
+});
+
+// why: verified against the real binary — `ls` of a missing directory exits 2 and PostToolUse still carries
+// `error: ""`. The exit code exists only in the transcript line for the step.
+test("PostToolUse run_command whose transcript step exited non-zero is tool.failure", () => {
+  asHook("PostToolUse");
+  const event = antigravityToEvent(postRunCommand("transcript.exit1.jsonl"));
+  assert.ok(event);
+  assert.equal(event.event, "tool.failure");
+  assert.equal(event.command, 'echo "oi" > hello.txt');
+});
+
+/**
+ * invariant: an unknown outcome is never a proof. The event stays a plain `tool.after` with no `command`, so the
+ * rules rail records nothing for it — and nothing throws or blocks, because the tool already ran.
+ */
+test("PostToolUse run_command with no readable exit code is an after-event that proves nothing", () => {
+  asHook("PostToolUse");
+  for (const transcript of [
+    "transcript.no-step.jsonl",
+    "transcript.no-pattern.jsonl",
+    "does-not-exist.jsonl",
+  ]) {
+    const event = antigravityToEvent(postRunCommand(transcript));
+    assert.ok(event, transcript);
+    assert.equal(event.event, "tool.after", transcript);
+    assert.equal(event.command, undefined, transcript);
+  }
+  const noStep = { ...postRunCommand("transcript.exit1.jsonl") };
+  delete noStep.stepIdx;
+  assert.equal(antigravityToEvent(noStep)?.event, "tool.after");
+  assert.equal(
+    antigravityToEvent({ ...fixture("PostToolUse.run_command"), transcriptPath: 7 })?.event,
+    "tool.after",
+  );
 });
 
 test("PostToolUse with a non-empty error is tool.failure, whatever the tool", () => {
@@ -261,7 +333,7 @@ test("the transcript path is not surfaced", () => {
 
 test("without the variable, tool and stop payloads are recognized by their own shape", () => {
   assert.equal(antigravityToEvent(fixture("PreToolUse.run_command"))?.event, "shell.before");
-  assert.equal(antigravityToEvent(fixture("PostToolUse.run_command"))?.event, "shell.after");
+  assert.equal(antigravityToEvent(postRunCommand("transcript.exit0.jsonl"))?.event, "shell.after");
   assert.equal(antigravityToEvent(fixture("Stop"))?.event, "stop");
 });
 

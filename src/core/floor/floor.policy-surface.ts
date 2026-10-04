@@ -161,6 +161,7 @@ function referencesSurface(
   projectDir: string,
   word: ShellWord,
   extraSurfacePaths: readonly string[],
+  base: string,
 ): boolean {
   if (word.text === "") {
     return false;
@@ -175,7 +176,7 @@ function referencesSurface(
     }
     return extraSurfacePaths.some((path) => normalized.includes(normalizeSeparators(path)));
   }
-  return overlapsSurface(projectDir, resolveTarget(projectDir, word.text), extraSurfacePaths);
+  return overlapsSurface(projectDir, resolveTarget(base, word.text), extraSurfacePaths);
 }
 
 // why: a redirect target is not an argument of the head verb, so argument scanning alone would allow
@@ -222,9 +223,10 @@ function checkSegment(
   projectDir: string,
   segment: ShellSegment,
   extraSurfacePaths: readonly string[],
+  base: string,
 ): PolicySurfaceVerdict {
   for (const target of redirectTargets(segment.words)) {
-    if (referencesSurface(projectDir, target, extraSurfacePaths)) {
+    if (referencesSurface(projectDir, target, extraSurfacePaths, base)) {
       return deny(
         "a redirect in this command writes into the harness policy surface.",
         "redirect into the policy surface",
@@ -244,7 +246,9 @@ function checkSegment(
     }
   }
 
-  const references = segment.words.filter((word) => referencesSurface(projectDir, word, extraSurfacePaths));
+  const references = segment.words.filter((word) =>
+    referencesSurface(projectDir, word, extraSurfacePaths, base),
+  );
   if (references.length === 0 && !namesSurface(projectDir, segment)) {
     return ALLOW;
   }
@@ -322,9 +326,11 @@ export function checkPolicySurface(
   command: string,
   segments: ShellSegment[],
   extraSurfacePaths: readonly string[] = [],
+  // why: where relative words resolve — the command's own directory when the call names one, else the project.
+  base: string = projectDir,
 ): PolicySurfaceVerdict {
   for (const segment of segments) {
-    const verdict = checkSegment(projectDir, segment, extraSurfacePaths);
+    const verdict = checkSegment(projectDir, segment, extraSurfacePaths, base);
     if (verdict.kind === "deny") {
       return verdict;
     }

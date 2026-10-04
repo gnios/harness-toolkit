@@ -1,5 +1,6 @@
 import type { HarnessEvent, HarnessEventKind } from "../../contracts/index.ts";
 import { sanitizeSegment } from "../../platform/sanitize.ts";
+import { readCommandExitCode } from "./antigravity.transcript.ts";
 
 /**
  * The variable the wiring sets, in the hook's own command text, to name the event being delivered.
@@ -150,7 +151,20 @@ function harnessToolName(call: ToolCall): string | undefined {
     const tool = asString(call.args?.ToolName);
     return server && tool ? `mcp__${server}__${tool}` : call.name;
   }
-  return call.name === undefined ? undefined : (WRITE_TOOL_NAMES[call.name] ?? call.name);
+  if (call.name === undefined) {
+    return undefined;
+  }
+  return WRITE_TOOL_NAMES[call.name] ?? (namesTargetFile(call) ? "Edit" : call.name);
+}
+
+/**
+ * hazard: only two edit tools were ever named, and an unnamed one carrying `TargetFile` reached the floor as an
+ * unknown tool — measured: `multi_replace_file_content` on the global hooks file was allowed. A tool that names a
+ * file to target is treated as writing it; failing closed costs a read-shaped tool an edit-collision ask at worst
+ * ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ */
+function namesTargetFile(call: ToolCall): boolean {
+  return typeof call.args?.TargetFile === "string";
 }
 
 function harnessToolInput(call: ToolCall): Record<string, unknown> | undefined {
@@ -178,6 +192,10 @@ function fillShell(event: HarnessEvent, args: Record<string, unknown> | undefine
   const cwd = asString(args?.Cwd);
   if (event.event === "shell.before" && cwd) {
     event.cwd = cwd;
+    // hazard: `Cwd` is an argument of the call, chosen per command. Resolved against the project instead, a
+    // relative `> hooks.json` run from the hooks directory was allowed to unregister the harness
+    // ([/decisions/ad-146.md](/decisions/ad-146.md)).
+    event.commandCwd = cwd;
   }
 }
 
@@ -246,10 +264,12 @@ export function antigravityToEvent(raw: Record<string, unknown>): HarnessEvent |
     return null;
   }
   const call = toolCallOf(raw);
-  const eventKind = eventKindFor(hookName, raw, call);
-  if (!eventKind) {
+  const mapped = eventKindFor(hookName, raw, call);
+  if (!mapped) {
     return null;
   }
+  const outcome = mapped === "shell.after" ? commandOutcome(raw) : "passed";
+  const eventKind = outcome === "passed" ? mapped : outcome === "failed" ? "tool.failure" : "tool.after";
 
   const event: HarnessEvent = {
     provider: "antigravity",
@@ -263,5 +283,30 @@ export function antigravityToEvent(raw: Record<string, unknown>): HarnessEvent |
     event.model = model;
   }
   fillByKind(event, raw, call);
+  if (outcome === "unknown") {
+    // invariant: without its command an after-event is observed by no rule, so an unknown outcome proves nothing.
+    delete event.command;
+  }
   return event;
+}
+
+/**
+ * Whether a `run_command` that PostToolUse reports with an empty `error` actually succeeded.
+ *
+ * hazard: verified against the real binary — a command that exits non-zero still arrives with `error: ""`. Taken
+ * as a success, a red `pytest` satisfied a `command(pytest)` proof. The exit code is read from the step's
+ * transcript line; when it cannot be read the answer is `unknown`, which proves nothing and blocks nothing — the
+ * tool already ran ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ */
+function commandOutcome(raw: Record<string, unknown>): "passed" | "failed" | "unknown" {
+  const transcriptPath = asString(raw.transcriptPath);
+  const stepIdx = raw.stepIdx;
+  if (!transcriptPath || typeof stepIdx !== "number") {
+    return "unknown";
+  }
+  const exitCode = readCommandExitCode(transcriptPath, stepIdx);
+  if (exitCode === null) {
+    return "unknown";
+  }
+  return exitCode === 0 ? "passed" : "failed";
 }

@@ -59,6 +59,13 @@ export type HarnessEvent = {
    * which anchors state/config and deliberately does not move into a worktree.
    */
   cwd?: string;
+  /**
+   * The directory one specific command runs in, when the host passes it as an argument of the call — so the agent
+   * chooses it per command. Relative words in that command resolve there, not at `projectDir`, or a call naming
+   * another directory reaches files the floor resolved somewhere else. Absent on hosts whose working directory is
+   * session state rather than a call argument ([/decisions/ad-146.md](/decisions/ad-146.md)).
+   */
+  commandCwd?: string;
   // hazard: the `spawn*` pair describes the child of a spawn; the unprefixed fields describe the
   // running agent. Conflating them clobbers sticky parent state.
   model?: string;

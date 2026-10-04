@@ -468,7 +468,33 @@ async function decideStopRules(
   });
 }
 
+/**
+ * The session-end release, for a host that never reports a session end.
+ *
+ * hazard: `session-end` releases a session's file claims, and a host with no such event left them standing for the
+ * whole stale window — measured against agy: three consecutive runs refused the same `Write` as `edit-collision`
+ * ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ *
+ * why only the claims, and not the rest of `session-end`: that handler also resets the stop-loop counter, and on a
+ * host whose every turn ends here a reset per stop would keep the grind cap from ever being reached.
+ *
+ * why not on `continue`: the agent keeps working, and its claims cover every file it wrote this turn, not only the
+ * next one. Releasing there would leave those files unclaimed until each is written again.
+ */
+export function releaseUnreportedSession(event: HarnessEvent, decision: Decision): void {
+  if (event.sessionEndUnreported !== true || decision.kind === "continue") {
+    return;
+  }
+  coreFacade.presence.release(event.projectDir, event.provider, sessionIdFromKey(event));
+}
+
 export const stopHandler: Handler = async (event: HarnessEvent, ctx: HandlerContext): Promise<Decision> => {
+  const decision = await decideStop(event, ctx);
+  releaseUnreportedSession(event, decision);
+  return decision;
+};
+
+const decideStop: Handler = async (event: HarnessEvent, ctx: HandlerContext): Promise<Decision> => {
   const { policy, capabilities } = ctx;
   const root = event.projectDir;
   const shaRoot = await shaScopeRoot(event);

@@ -1,0 +1,11 @@
+{
+  "artifactDirectoryPath": "/Users/dev/.gemini/antigravity-cli/brain/3520b054-a345-44f5-bfcd-305ebac54fe3",
+  "conversationId": "3520b054-a345-44f5-bfcd-305ebac54fe3",
+  "initialNumSteps": 1,
+  "invocationNum": 1,
+  "modelName": "gemini-3.8-flash-medium",
+  "transcriptPath": "/Users/dev/.gemini/antigravity-cli/brain/3520b054-a345-44f5-bfcd-305ebac54fe3/.system_generated/logs/transcript_full.jsonl",
+  "workspacePaths": [
+    "/private/tmp/agyws"
+  ]
+}

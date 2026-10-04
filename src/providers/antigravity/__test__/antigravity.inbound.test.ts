@@ -87,6 +87,33 @@ test("an invocation payload with no event variable is unrecognized rather than g
   assert.equal(antigravityToEvent(fixture("PostInvocation")), null);
 });
 
+// why: PreInvocation fires before every model call, not every prompt — 56 of them for one short task against the
+// real binary. Only the first call of an invocation is the turn boundary prompt.submit stands for.
+test("a PreInvocation after the first model call is ignored, not a second turn boundary", () => {
+  asHook("PreInvocation");
+  assert.equal(fixture("PreInvocation").invocationNum, 0);
+  assert.equal(fixture("PreInvocation.invocation1").invocationNum, 1);
+  assert.equal(antigravityToEvent(fixture("PreInvocation.invocation1")), null);
+  assert.equal(antigravityToEvent({ ...fixture("PreInvocation"), invocationNum: 7 }), null);
+});
+
+// invariant: no guess. Without the counter the first call cannot be told from the fifty-fifth, and a missed
+// boundary falls back to diffing against HEAD while a false one resets once-per-turn state mid-turn.
+test("a PreInvocation without a numeric invocationNum is ignored", () => {
+  asHook("PreInvocation");
+  const { invocationNum: _n, ...withoutCounter } = fixture("PreInvocation");
+  assert.equal(antigravityToEvent(withoutCounter), null);
+  assert.equal(antigravityToEvent({ ...fixture("PreInvocation"), invocationNum: "0" }), null);
+});
+
+// why: agy never reports the end of a session, so the stop is the last point the harness is guaranteed to see.
+test("Stop marks the session end as unreported; other events do not", () => {
+  asHook("Stop");
+  assert.equal(antigravityToEvent(fixture("Stop"))?.sessionEndUnreported, true);
+  asHook("PreToolUse");
+  assert.equal(antigravityToEvent(fixture("PreToolUse.run_command"))?.sessionEndUnreported, undefined);
+});
+
 test("PostInvocation is not mapped", () => {
   asHook("PostInvocation");
   assert.equal(antigravityToEvent(fixture("PostInvocation")), null);

@@ -112,11 +112,27 @@ function failed(raw: Record<string, unknown>): boolean {
   return error !== undefined && error.length > 0;
 }
 
+/**
+ * hazard: PreInvocation fires before every model call of an invocation, not once per prompt — measured at 56 for one
+ * short task, `invocationNum` counting 0, 1, 2… Mapped whole, each was a turn boundary: once-per-turn markers
+ * cleared mid-turn and the turn base re-captured after the turn's own edits.
+ *
+ * invariant: only a numeric `0` is the boundary. A payload without the counter is ignored rather than guessed —
+ * a missed boundary falls back to diffing against HEAD, the existing safe default, while a false one corrupts the
+ * turn ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ */
+function isFirstInvocation(raw: Record<string, unknown>): boolean {
+  return raw.invocationNum === 0;
+}
+
 function eventKindFor(
   hookName: string,
   raw: Record<string, unknown>,
   call: ToolCall,
 ): HarnessEventKind | undefined {
+  if (hookName === "PreInvocation") {
+    return isFirstInvocation(raw) ? EVENT_KIND_BY_HOOK.PreInvocation : undefined;
+  }
   if (hookName === "PreToolUse") {
     return matchFanOut(PRE_TOOL_USE_FAN_OUT, call.name, "tool.before");
   }
@@ -205,6 +221,8 @@ function fillByKind(event: HarnessEvent, raw: Record<string, unknown>, call: Too
       return;
     }
     case "stop":
+      // why: agy has no session-end event, so this stop is the last one the harness is guaranteed to see.
+      event.sessionEndUnreported = true;
       if (failed(raw)) {
         event.status = "error";
       }

@@ -104,8 +104,28 @@ fetches outside content was captured.
 Any other tool is `tool.before`/`tool.after`. A `PostToolUse` whose `error` is non-empty is `tool.failure`,
 whatever the tool. `PostInvocation` is not mapped and not wired.
 
-`PreInvocation` is `prompt.submit` because it is the turn boundary: it fires before the model runs, and
-`prompt-submit` records the commit every stop-time gate diffs against. It carries no prompt text.
+`PreInvocation` is `prompt.submit` **only when `invocationNum` is the number `0`**. It fires before every model
+call, not every prompt — 56 times for one short task against the real binary, `invocationNum` counting 0, 1, 2…
+— and `prompt.submit` is the turn boundary: it clears once-per-turn markers and records the commit every
+stop-time gate diffs against. A later call, or a payload without a numeric `invocationNum`, is ignored rather
+than guessed: a missed boundary falls back to diffing against `HEAD`, while a false one would reset the turn
+mid-turn. Each ignored call still leaves one `adapter.unrecognized` record (`reason: unrecognized-event`) in the
+workspace's `obs.jsonl`. It carries no prompt text.
+
+**Not verified:** whether `invocationNum` restarts at `0` for each prompt of an interactive conversation, or
+counts across the conversation. Only `agy -p` was observed; if it counts across, later prompts get no boundary
+and their gates diff against the first prompt's base.
+
+### The session ends at Stop
+
+agy has no session-end event, so the file claims that `session-end` releases on other hosts stood for the full
+ten-minute stale window — measured: three consecutive `agy -p` runs had the same `Write` refused as
+`edit-collision`. Every agy `stop` carries `sessionEndUnreported: true`, and the `stop` entrypoint releases the
+session's presence (its claims) when it lets the agent stop. It does **not** release on a `continue`: the agent
+keeps working, and its claims cover every file it wrote that turn — only the next file it writes would be
+reclaimed. Nothing else `session-end` does runs here; in particular the stop-loop counter is not reset, which a
+per-stop reset would make the grind cap unreachable. In an interactive conversation this releases at the end of
+every turn, so another session's write in between is no longer asked about.
 
 Fields: `toolCall.args.CommandLine` → `command`; `run_command`'s `Cwd` → `cwd` on `shell.before` only;
 `TargetFile`/`AbsolutePath` → `filePath`; `write_to_file` → `toolName: "Write"` with `CodeContent` as

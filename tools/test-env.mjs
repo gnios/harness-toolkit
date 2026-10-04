@@ -10,9 +10,9 @@
 import { mkdtempSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { PROJECT_SCOPED_ENV, RUNTIME_SCOPED_ENV } from "./test-env.names.mjs";
+import { HOOK_SCOPED_ENV, PROJECT_SCOPED_ENV, RUNTIME_SCOPED_ENV } from "./test-env.names.mjs";
 
-for (const name of PROJECT_SCOPED_ENV) {
+for (const name of [...PROJECT_SCOPED_ENV, ...HOOK_SCOPED_ENV]) {
   delete process.env[name];
 }
 

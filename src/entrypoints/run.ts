@@ -219,7 +219,9 @@ export async function runHandler(handler: Handler, io: RunIo = {}): Promise<RunO
       ...(claimsFile(event) ? { file: event.filePath } : {}),
       now,
     });
-    const protectedPaths = providerRegistry.flatMap((p) => p.wiringTargets());
+    // why the project: a host that reads hooks from the workspace has a wiring file only this event can locate,
+    // and it is protected whichever provider's agent is the one writing ([/decisions/ad-146.md](/decisions/ad-146.md)).
+    const protectedPaths = providerRegistry.flatMap((p) => p.wiringTargets(event.projectDir));
     const context: HandlerContext = { policy, capabilities, provider, now, protectedPaths };
     const decision = await handler(event, context);
     const degraded = degrade(decision, event, capabilities, {

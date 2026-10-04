@@ -1,7 +1,7 @@
 ---
 type: Aggregate
 title: "Providers index"
-description: "Index of the provider adapters — Cursor and Claude Code — and the port they both implement."
+description: "Index of the provider adapters — Cursor, Claude Code and Antigravity CLI — and the port they implement."
 tags: [providers, index, architecture]
 timestamp: "2026-07-29"
 ---
@@ -21,6 +21,8 @@ type ProviderPort = {
   toEvent(raw: Record<string, unknown>): HarnessEvent | null;
   render(decision: Decision, event: HarnessEvent): Rendered;
   wiring(runtime: RuntimePaths): ProviderWiring;
+  wiringTargets(projectDir?: string): string[];
+  lessonsView(root: string): string | null;
 };
 ```
 
@@ -32,6 +34,10 @@ type ProviderPort = {
 - `toEvent` — parses a raw hook payload into the shared `HarnessEvent` shape.
 - `render` — turns a core `Decision` back into this provider's wire format.
 - `wiring` — describes which hooks this provider needs registered, and where.
+- `wiringTargets` — every file this provider reads its hook registration from, for the floor's `wiring-tamper`
+  rule; given the project, a host with a workspace-level hooks file names that too
+  ([/decisions/ad-146.md](/decisions/ad-146.md)).
+- `lessonsView` — writes the durable lessons view this host reads, or returns `null` when it has none.
 
 ## Registered providers
 
@@ -42,10 +48,11 @@ matches are reported as ambiguous rather than silently resolved:
 | --- | --- | --- |
 | Cursor | camelCase `hook_event_name` + `workspace_roots` array | [/providers/cursor.md](/providers/cursor.md) |
 | Claude Code | PascalCase `hook_event_name` + `cwd` or `transcript_path` | [/providers/claude-code.md](/providers/claude-code.md) |
+| Antigravity CLI (`agy`) | `conversationId` + `workspacePaths` array, and no `hook_event_name` | [/providers/antigravity.md](/providers/antigravity.md) |
 
 ## Event kinds
 
-Both adapters translate into the same 18-member `HarnessEventKind` union (see
+Every adapter translates into the same 18-member `HarnessEventKind` union (see
 [/decisions/ad-009.md](/decisions/ad-009.md) item 1): `session.start`, `session.end`, `prompt.submit`,
 `tool.before`, `tool.after`, `tool.failure`, `shell.before`, `shell.after`, `mcp.before`, `mcp.after`,
 `read.before`, `edit.after`, `subagent.start`, `subagent.stop`, `stop`, `compact.before`, `response.after`,

@@ -735,6 +735,97 @@ test("an Edit tool call against Claude's real wiring target is denied end-to-end
   }
 });
 
+function agyTool(root: string, name: string, args: Record<string, unknown>): string {
+  return JSON.stringify({
+    conversationId: "agy-conv-1",
+    workspacePaths: [root],
+    modelName: "gemini-3.8-flash-medium",
+    toolCall: { name, args },
+  });
+}
+
+/**
+ * Antigravity, end-to-end: its hook files live in the user's home and in the workspace, and both are where agy
+ * reads its hook registration from. The payload carries no event name, so the shape decides — the same path a
+ * hook whose shell dropped the event variable takes.
+ */
+test("an agy write_to_file to its global hooks file is denied end-to-end under wiring-tamper", async () => {
+  const root = tempRoot();
+  try {
+    const target = providerNamed("antigravity").wiringTargets()[0];
+    const outcome = await runHandler(
+      toolBeforeHandler,
+      stdinOf(agyTool(root, "write_to_file", { TargetFile: target, CodeContent: "{}" })),
+    );
+    assert.equal(outcome.decision.kind, "deny");
+    assert.match(outcome.decision.kind === "deny" ? outcome.decision.reason : "", /rule=wiring-tamper/);
+    assert.deepEqual(JSON.parse(outcome.rendered.stdout ?? "{}").decision, "deny");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an agy write_to_file to the workspace .agents/hooks.json is denied end-to-end under wiring-tamper", async () => {
+  const root = tempRoot();
+  try {
+    const target = join(root, ".agents", "hooks.json");
+    const outcome = await runHandler(
+      toolBeforeHandler,
+      stdinOf(agyTool(root, "write_to_file", { TargetFile: target, CodeContent: "{}" })),
+    );
+    assert.equal(outcome.decision.kind, "deny");
+    assert.match(outcome.decision.kind === "deny" ? outcome.decision.reason : "", /rule=wiring-tamper/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an agy run_command redirecting into the workspace .agents/hooks.json is denied under wiring-tamper", async () => {
+  const root = tempRoot();
+  try {
+    const outcome = await runHandler(
+      toolBeforeHandler,
+      stdinOf(agyTool(root, "run_command", { CommandLine: "echo '{}' > .agents/hooks.json", Cwd: root })),
+    );
+    assert.equal(outcome.decision.kind, "deny");
+    assert.match(outcome.decision.kind === "deny" ? outcome.decision.reason : "", /rule=wiring-tamper/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a Claude Edit of a workspace's .agents/hooks.json is denied too — the file is agy's, whoever writes it", async () => {
+  const root = tempRoot();
+  try {
+    const outcome = await runHandler(
+      toolBeforeHandler,
+      stdinOf(
+        claudeTool(root, {
+          tool_name: "Edit",
+          tool_input: { file_path: join(root, ".agents", "hooks.json") },
+        }),
+      ),
+    );
+    assert.equal(outcome.decision.kind, "deny");
+    assert.match(outcome.decision.kind === "deny" ? outcome.decision.reason : "", /rule=wiring-tamper/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an agy write_to_file of an ordinary project file is not refused by the floor", async () => {
+  const root = tempRoot();
+  try {
+    const outcome = await runHandler(
+      toolBeforeHandler,
+      stdinOf(agyTool(root, "write_to_file", { TargetFile: join(root, "hello.txt"), CodeContent: "oi" })),
+    );
+    assert.notEqual(outcome.decision.kind, "deny");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 /**
  * EFH-04 — a new provider's wiring target is protected the moment it registers, with zero change to
  * run.ts or tool-before.ts. The fixture is pushed into the real registry and spliced back out, the same

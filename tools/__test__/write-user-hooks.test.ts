@@ -296,3 +296,63 @@ describe("provider dispatch loop (skip-when-absent, independent-failure semantic
     assert.ok(existsSync(cursor.target));
   });
 });
+
+/**
+ * hazard: dispatch was two-way on `strategy`, and anything not `replace` went to the Claude merge. A third host's
+ * file reaching that branch would be rewritten into another host's schema on the next `tlc harness update` — and
+ * agy's global hooks file already holds the Orca hook ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ */
+describe("named-merge dispatch (antigravity)", () => {
+  const orca = {
+    PreInvocation: [
+      { type: "command", command: "ORCA_ANTIGRAVITY_EVENT='PreInvocation' /bin/sh x", timeout: 10 },
+    ],
+  };
+
+  function agyWiringFixture(root: string): ProviderWiring {
+    const target = join(root, ".gemini", "config", "hooks.json");
+    mkdirSync(dirname(target), { recursive: true });
+    return {
+      target,
+      strategy: "named-merge",
+      entries: [
+        {
+          hookEvent: "Stop",
+          handler: "stop",
+          command: "node",
+          args: [join(root, "tlc-exec.mjs"), "stop"],
+          timeoutSeconds: 120,
+        },
+      ],
+    };
+  }
+
+  test("merges our hook set beside a foreign one, never into Claude's schema", () => {
+    const root = newRoot();
+    const wiring = agyWiringFixture(root);
+    writeFileSync(wiring.target, JSON.stringify({ "orca-status": orca }, null, 2));
+
+    const result = applyProviderWiring(wiring);
+
+    assert.equal(result.status, "merged");
+    const document = JSON.parse(readFileSync(wiring.target, "utf8")) as Record<string, unknown>;
+    assert.deepEqual(document["orca-status"], orca);
+    assert.ok("tlc-harness" in document);
+    assert.ok(!("hooks" in document), "a Claude-shaped `hooks` key was written into agy's file");
+  });
+
+  test("a second apply is unchanged", () => {
+    const root = newRoot();
+    const wiring = agyWiringFixture(root);
+    applyProviderWiring(wiring);
+    assert.equal(applyProviderWiring(wiring).status, "unchanged");
+  });
+
+  test("a malformed file fails the step and is left as it was", () => {
+    const root = newRoot();
+    const wiring = agyWiringFixture(root);
+    writeFileSync(wiring.target, "{ nope");
+    assert.equal(applyProviderWiring(wiring).status, "failed");
+    assert.equal(readFileSync(wiring.target, "utf8"), "{ nope");
+  });
+});

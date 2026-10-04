@@ -12,6 +12,10 @@ import {
 import { tmpdir } from "node:os";
 import { join, posix, win32 } from "node:path";
 import { test } from "node:test";
+import {
+  antigravityWiring,
+  mergeAntigravityHooks,
+} from "../../src/providers/antigravity/antigravity.wiring.ts";
 import { claudeWiring, mergeClaudeSettings } from "../../src/providers/claude/claude.wiring.ts";
 import { OPERATOR_OWNED, RUNTIME_PAYLOAD } from "../install-runtime.ts";
 import {
@@ -26,6 +30,10 @@ import {
 } from "../uninstall-runtime.ts";
 
 const LAUNCHER = "bin/tlc-exec.mjs";
+
+const ORCA_STATUS = {
+  Stop: [{ type: "command", command: "ORCA_ANTIGRAVITY_EVENT='Stop' /bin/sh x", timeout: 10 }],
+};
 
 function tempRoot(): string {
   return mkdtempSync(join(tmpdir(), "tlc-uninstall-test-"));
@@ -75,6 +83,14 @@ function installedMachine(options: { linkedHome?: boolean } = {}): {
     JSON.stringify({ version: 1, hooks: { stop: [{ command: `node ${launcherPath} stop` }] } }, null, 2),
   );
 
+  const agyDir = join(root, "dot-gemini", "config");
+  mkdirSync(agyDir, { recursive: true });
+  const agy = mergeAntigravityHooks(
+    JSON.stringify({ "orca-status": ORCA_STATUS }),
+    antigravityWiring({ launcherPath }).entries,
+  );
+  writeFileSync(join(agyDir, "hooks.json"), agy.ok ? agy.text : "");
+
   const skillLinks = [join(claudeDir, "skills", "harness-init"), join(cursorDir, "skills", "harness-init")];
   mkdirSync(join(payloadRoot, "skills", "harness-init"), { recursive: true });
   for (const link of skillLinks) {
@@ -91,6 +107,7 @@ function installedMachine(options: { linkedHome?: boolean } = {}): {
       binLinks: [binLink],
       claudeSettings: join(claudeDir, "settings.json"),
       cursorHooks: join(cursorDir, "hooks.json"),
+      antigravityHooks: join(agyDir, "hooks.json"),
       skillLinks,
     },
   };
@@ -199,6 +216,38 @@ test("a cursor hooks.json holding a foreign entry is rewritten, not removed", ()
   assert.deepEqual(document.hooks.stop, [{ command: "bash /home/me/notify.sh" }]);
 });
 
+test("an agy hooks.json loses only our hook set, and the Orca hook beside it survives", () => {
+  const { targets } = installedMachine();
+  const plan = planUninstall(targets);
+  assert.equal(plan.items.find((item) => item.target === targets.antigravityHooks)?.action, "unmerge");
+  applyUninstall(plan, targets);
+  assert.deepEqual(JSON.parse(readFileSync(targets.antigravityHooks, "utf8")), {
+    "orca-status": ORCA_STATUS,
+  });
+  assert.equal(
+    planUninstall(targets).items.some((item) => item.target === targets.antigravityHooks),
+    false,
+    "a second run has nothing left to do there",
+  );
+});
+
+test("an agy hooks.json holding only our hook set is removed outright", () => {
+  const { targets } = installedMachine();
+  const merged = mergeAntigravityHooks(null, antigravityWiring({ launcherPath: "/x/tlc-exec.mjs" }).entries);
+  writeFileSync(targets.antigravityHooks, merged.ok ? merged.text : "");
+  applyUninstall(planUninstall(targets), targets);
+  assert.equal(existsSync(targets.antigravityHooks), false);
+});
+
+test("an agy hooks.json that does not parse is reported and never rewritten", () => {
+  const { targets } = installedMachine();
+  writeFileSync(targets.antigravityHooks, "{ broken");
+  const plan = planUninstall(targets);
+  assert.equal(plan.items.find((item) => item.target === targets.antigravityHooks)?.action, "keep");
+  applyUninstall(plan, targets);
+  assert.equal(readFileSync(targets.antigravityHooks, "utf8"), "{ broken");
+});
+
 test("a settings.json that does not parse is reported and never rewritten", () => {
   const { targets } = installedMachine();
   writeFileSync(targets.claudeSettings, "{ broken");
@@ -278,6 +327,7 @@ test("a dangling link is still ours when an ancestor of the home is itself a sym
     binLinks: [binLink],
     claudeSettings: join(root, "absent.json"),
     cursorHooks: join(root, "absent-hooks.json"),
+    antigravityHooks: join(root, "absent-agy-hooks.json"),
     skillLinks: [],
   });
   assert.equal(live.items.find((item) => item.target === binLink)?.action, "unlink");
@@ -288,6 +338,7 @@ test("a dangling link is still ours when an ancestor of the home is itself a sym
     binLinks: [binLink],
     claudeSettings: join(root, "absent.json"),
     cursorHooks: join(root, "absent-hooks.json"),
+    antigravityHooks: join(root, "absent-agy-hooks.json"),
     skillLinks: [],
   });
   assert.equal(dangling.items.find((item) => item.target === binLink)?.action, "unlink");
@@ -370,6 +421,7 @@ test("a launcher installed as a copy is removed; an unrelated file of the same n
     home: join(root, "runtime"),
     claudeSettings: join(root, "absent.json"),
     cursorHooks: join(root, "absent-hooks.json"),
+    antigravityHooks: join(root, "absent-agy-hooks.json"),
     skillLinks: [],
   };
   assert.equal(

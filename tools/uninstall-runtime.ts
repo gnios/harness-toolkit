@@ -21,6 +21,10 @@ import {
 } from "../src/platform/paths.ts";
 import { type Row, render, type Screen } from "../src/platform/screen.ts";
 import { createStyle, PLAIN, type Style } from "../src/platform/style.ts";
+import {
+  antigravityGlobalHooksPath,
+  unmergeAntigravityHooks,
+} from "../src/providers/antigravity/antigravity.wiring.ts";
 import { removeClaudeWiring, unmergeClaudeSettings } from "../src/providers/claude/claude.wiring.ts";
 import { unwireCursorHooks } from "../src/providers/cursor/cursor.wiring.ts";
 import { OPERATOR_OWNED, RUNTIME_PAYLOAD } from "./install-runtime.ts";
@@ -46,6 +50,7 @@ export type UninstallTargets = {
   binLinks: string[];
   claudeSettings: string;
   cursorHooks: string;
+  antigravityHooks: string;
   skillLinks: string[];
 };
 
@@ -71,6 +76,7 @@ export function uninstallTargets(env: NodeJS.ProcessEnv = process.env): Uninstal
     binLinks: launcherNames().map((name) => join(binDir, name)),
     claudeSettings: join(claudeConfigDir(), "settings.json"),
     cursorHooks: join(cursorConfigDir(), "hooks.json"),
+    antigravityHooks: antigravityGlobalHooksPath(),
     skillLinks: [
       join(claudeConfigDir(), "skills", "harness-init"),
       join(cursorConfigDir(), "skills", "harness-init"),
@@ -257,6 +263,42 @@ function planCursor(items: PlanItem[], hooksPath: string): void {
   }
 }
 
+// invariant: the file is a map of named hook sets, and only ours leaves. Another tool's set — the Orca hook lives
+// here on the machine this was built against — is that tool's to remove ([/decisions/ad-146.md](/decisions/ad-146.md)).
+function planAntigravity(items: PlanItem[], hooksPath: string): void {
+  const result = unmergeAntigravityHooks(existsSync(hooksPath) ? readFileSync(hooksPath, "utf8") : null);
+  switch (result.kind) {
+    case "absent":
+    case "unchanged":
+      return;
+    case "unparsed":
+      items.push({ action: "keep", target: hooksPath, detail: "left untouched — it does not parse as JSON" });
+      return;
+    case "empty":
+      items.push({ action: "remove", target: hooksPath, detail: "only the harness hook set was in it" });
+      return;
+    default:
+      items.push({
+        action: "unmerge",
+        target: hooksPath,
+        detail: "drop the harness hook set, keep every other named hook set",
+      });
+  }
+}
+
+function unmergeFile(item: PlanItem, targets: UninstallTargets): void {
+  if (item.target === targets.claudeSettings) {
+    removeClaudeWiring(item.target);
+    return;
+  }
+  const text = readFileSync(item.target, "utf8");
+  const result =
+    item.target === targets.antigravityHooks ? unmergeAntigravityHooks(text) : unwireCursorHooks(text);
+  if (result.kind === "rewritten") {
+    writeFileSync(item.target, result.text, "utf8");
+  }
+}
+
 function planRuntime(items: PlanItem[], home: string, purge: boolean): boolean {
   const homeIsLink = isSymlink(home);
   if (homeIsLink) {
@@ -319,6 +361,7 @@ export function planUninstall(targets: UninstallTargets, options: { purge?: bool
 
   planClaude(items, targets.claudeSettings);
   planCursor(items, targets.cursorHooks);
+  planAntigravity(items, targets.antigravityHooks);
   for (const link of targets.skillLinks) {
     planLink(items, link, targets.home, "skill link", "location");
   }
@@ -346,13 +389,8 @@ export function applyUninstall(plan: UninstallPlan, targets: UninstallTargets): 
 
   for (const item of pendingItems(plan)) {
     try {
-      if (item.action === "unmerge" && item.target === targets.claudeSettings) {
-        removeClaudeWiring(item.target);
-      } else if (item.action === "unmerge") {
-        const result = unwireCursorHooks(readFileSync(item.target, "utf8"));
-        if (result.kind === "rewritten") {
-          writeFileSync(item.target, result.text, "utf8");
-        }
+      if (item.action === "unmerge") {
+        unmergeFile(item, targets);
       } else if (item.action === "unlink") {
         // why: `unlinkSync` states the intent — remove the link, never what it points at. Measured: `rmSync`
         // with `recursive` happens to agree, unlinking a symlink rather than descending it. The guard that

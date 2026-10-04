@@ -153,6 +153,52 @@ describe("providerWiringStatus", () => {
     assert.equal(providerWiringStatus({ target, strategy: "merge", entries }), "wired");
   });
 
+  test("a named-merge target holding only a foreign hook set is detected but not wired", () => {
+    const root = newRoot();
+    const home = join(root, "gemini-config");
+    mkdirSync(home, { recursive: true });
+    const target = join(home, "hooks.json");
+    writeFileSync(target, JSON.stringify({ "orca-status": { Stop: [] } }));
+    const entries = [
+      {
+        hookEvent: "Stop",
+        handler: "stop",
+        command: "node",
+        args: ["/x/tlc-exec.mjs", "stop"],
+        timeoutSeconds: 5,
+      },
+    ];
+    assert.equal(providerWiringStatus({ target, strategy: "named-merge", entries }), "detected-but-unwired");
+  });
+
+  // hazard: read through the Claude merge, a correct agy file is never "wired" — it has no `hooks` key — so doctor
+  // would tell an operator with working hooks to run an update that changes nothing, every time.
+  test("a named-merge target already carrying our hook set is wired", () => {
+    const root = newRoot();
+    const home = join(root, "gemini-config");
+    mkdirSync(home, { recursive: true });
+    const target = join(home, "hooks.json");
+    const entries = [
+      {
+        hookEvent: "Stop",
+        handler: "stop",
+        command: "node",
+        args: ["/x/tlc-exec.mjs", "stop"],
+        timeoutSeconds: 5,
+      },
+    ];
+    writeFileSync(
+      target,
+      JSON.stringify({
+        "orca-status": { Stop: [] },
+        "tlc-harness": {
+          Stop: [{ type: "command", command: "TLC_AGY_EVENT=Stop node /x/tlc-exec.mjs stop", timeout: 5 }],
+        },
+      }),
+    );
+    assert.equal(providerWiringStatus({ target, strategy: "named-merge", entries }), "wired");
+  });
+
   test("a stale harness entry from an older launcher path is replaced, not duplicated", () => {
     const root = newRoot();
     const home = join(root, "claude-home");

@@ -21,6 +21,16 @@ export const PROJECT_SCOPED_ENV = ["CLAUDE_PROJECT_DIR", "CURSOR_PROJECT_DIR", "
 export const RUNTIME_SCOPED_ENV = ["TLC_ORIGIN", "TLC_HOME_FROM_ENV"];
 
 /**
+ * A third kind: variables a host hook sets to describe the one event it is delivering. Every process the hook
+ * starts inherits them, and a gate that runs this suite is one — so a test would read the event of the hook that
+ * launched the suite instead of the one it declares.
+ *
+ * why its own list: it names neither a project nor a runtime copy, and a list whose invariant a member breaks is
+ * how two behaviours end up sharing one ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ */
+export const HOOK_SCOPED_ENV = ["TLC_AGY_EVENT"];
+
+/**
  * The other half: variables that name a *destination*, which are redirected rather than deleted. Deleting them
  * sends an install or a wiring step at the machine's real paths, which is the opposite of hermetic.
  *

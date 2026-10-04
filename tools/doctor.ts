@@ -18,6 +18,7 @@ import {
 } from "../src/platform/paths.ts";
 import { catalogueMeta, planeMeta } from "../src/platform/pricing.ts";
 import { type ColorName, createStyle, PLAIN, type Style, SYMBOLS } from "../src/platform/style.ts";
+import { mergeAntigravityHooks } from "../src/providers/antigravity/antigravity.wiring.ts";
 import { mergeClaudeSettings } from "../src/providers/claude/claude.wiring.ts";
 import {
   cursorWiringProblems,
@@ -383,7 +384,11 @@ export function providerWiringStatus(wiring: ProviderWiring): ProviderWiringStat
     return wiringProblems(wiring).length === 0 ? "wired" : "detected-but-unwired";
   }
   const existingText = existsSync(wiring.target) ? readFileSync(wiring.target, "utf8") : null;
-  const result = mergeClaudeSettings(existingText, wiring.entries);
+  // invariant: health is asked of the same merge the writer runs, so "wired" means an update would change nothing.
+  const result =
+    wiring.strategy === "named-merge"
+      ? mergeAntigravityHooks(existingText, wiring.entries)
+      : mergeClaudeSettings(existingText, wiring.entries);
   return result.ok && !result.changed ? "wired" : "detected-but-unwired";
 }
 

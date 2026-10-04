@@ -12,7 +12,14 @@ import {
   cursorConfigDir,
   launcherBinDir,
 } from "../../src/platform/paths.ts";
-import { PROJECT_SCOPED_ENV, PUBLISHED_ENV, REDIRECTED_ENV, RUNTIME_SCOPED_ENV } from "../test-env.names.mjs";
+import { ANTIGRAVITY_EVENT_ENV } from "../../src/providers/antigravity/antigravity.inbound.ts";
+import {
+  HOOK_SCOPED_ENV,
+  PROJECT_SCOPED_ENV,
+  PUBLISHED_ENV,
+  REDIRECTED_ENV,
+  RUNTIME_SCOPED_ENV,
+} from "../test-env.names.mjs";
 
 // invariant: the names come from test-env.names.mjs, which has no side effect. Importing test-env.mjs here
 // would run its delete loop, so the guard would clean the environment it is asserting about and could never
@@ -22,6 +29,22 @@ import { PROJECT_SCOPED_ENV, PUBLISHED_ENV, REDIRECTED_ENV, RUNTIME_SCOPED_ENV }
 // directory resolved against the real repository. It passed from a shell and failed from inside a hook.
 test("no project-identifying variable reaches a test", () => {
   for (const name of PROJECT_SCOPED_ENV) {
+    assert.equal(
+      process.env[name],
+      undefined,
+      `${name} leaked into the suite. The runner must be launched with ${TEST_ENV_IMPORT.join(" ")} — see tools/test-env.mjs.`,
+    );
+  }
+});
+
+/**
+ * hazard: the agy wiring names the event in the hook's environment, and every process the hook starts inherits
+ * it — including a gate that runs this suite. Left set, the adapter's tests would read the event of whichever hook
+ * launched them instead of the one each test declares ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ */
+test("no variable naming a hook's event reaches a test", () => {
+  assert.ok(HOOK_SCOPED_ENV.includes(ANTIGRAVITY_EVENT_ENV), `${ANTIGRAVITY_EVENT_ENV} is not scrubbed`);
+  for (const name of HOOK_SCOPED_ENV) {
     assert.equal(
       process.env[name],
       undefined,

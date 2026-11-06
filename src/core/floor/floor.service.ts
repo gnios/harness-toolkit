@@ -1,5 +1,12 @@
 import type { Decision } from "../../contracts/decision.ts";
-import { isInside, isProtectedWiringTarget, isScratch, isSecretPath, resolveTarget } from "./floor.paths.ts";
+import {
+  isInExtraRoot,
+  isInside,
+  isProtectedWiringTarget,
+  isScratch,
+  isSecretPath,
+  resolveTarget,
+} from "./floor.paths.ts";
 import { checkPolicySurface } from "./floor.policy-surface.ts";
 import { type ShellSegment, type ShellWord, tokenizeShell } from "./floor.tokenize.ts";
 import { verbOf } from "./floor.verb.ts";
@@ -253,7 +260,7 @@ function checkShell(input: FloorInput): Decision {
           `${verb} of ${resolved}`,
         );
       }
-      if (!isInside(input.projectDir, resolved) && !isScratch(resolved)) {
+      if (!isInside(input.projectDir, resolved) && !isScratch(resolved) && !isInExtraRoot(resolved)) {
         return denial(
           "outside-project-destruction",
           `\`${verb}\` targets ${resolved}, which is outside the project and outside scratch space.`,

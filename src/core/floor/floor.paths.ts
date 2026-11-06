@@ -1,5 +1,5 @@
 import { homedir, tmpdir } from "node:os";
-import { basename, isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, delimiter, isAbsolute, relative, resolve, sep } from "node:path";
 import {
   flagsDir,
   machineConfigPath,
@@ -30,6 +30,23 @@ export function isInside(parent: string, child: string): boolean {
 // concern even though it sits outside the project.
 export function isScratch(target: string, tmp = tmpdir()): boolean {
   return isInside(tmp, target);
+}
+
+// why: an operator whose work spans repositories kept beside the project (a control tower) lists those
+// workspace roots in TLC_FLOOR_EXTRA_ROOTS (colon-separated). Unset means no extra roots: the default is unchanged.
+// hazard: a root that is the filesystem root or the home directory would allow everything, so it is ignored.
+export function extraAllowedRoots(env: NodeJS.ProcessEnv = process.env, home = homedir()): string[] {
+  const roots = (env.TLC_FLOOR_EXTRA_ROOTS ?? "")
+    .split(delimiter)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return roots
+    .map((entry) => resolve(expandHome(entry, home)))
+    .filter((root) => root !== resolve("/") && root !== resolve(home));
+}
+
+export function isInExtraRoot(target: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  return extraAllowedRoots(env).some((root) => isInside(root, target));
 }
 
 // hazard: the runtime config is merged by `loadPolicy` under the project one, so a field the project does

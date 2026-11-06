@@ -448,6 +448,28 @@ test("a relative destructive target is resolved in the command's directory, not 
   assert.equal(shellIn(join(PROJECT, "sub"), "rm build/x").kind, "allow");
 });
 
+test("destruction inside an operator-listed extra root is allowed; outside every root it is still denied", () => {
+  const root = join(HOME, "orca", "workspaces");
+  const env = { HOME, USERPROFILE: HOME, TLC_FLOOR_EXTRA_ROOTS: root };
+  const inside = withEnv(env, () =>
+    evaluateFloor({ projectDir: PROJECT, command: `rm -rf ${join(root, "old-repo")}` }),
+  );
+  const outside = withEnv(env, () =>
+    evaluateFloor({ projectDir: PROJECT, command: `rm -rf ${join(HOME, "Documents")}` }),
+  );
+  assert.equal(inside.kind, "allow");
+  assert.equal(ruleOf(outside), "outside-project-destruction");
+});
+
+test("the filesystem root or the home directory listed as an extra root grants nothing", () => {
+  for (const extra of ["/", HOME]) {
+    const decision = withEnv({ HOME, USERPROFILE: HOME, TLC_FLOOR_EXTRA_ROOTS: extra }, () =>
+      evaluateFloor({ projectDir: PROJECT, command: `rm -rf ${join(HOME, "Documents")}` }),
+    );
+    assert.equal(ruleOf(decision), "outside-project-destruction");
+  }
+});
+
 test("a relative command directory is itself resolved against the project", () => {
   assert.equal(ruleOf(shellIn("sub", "echo x > ../.tlc/harness/config.json")), "policy-surface-write");
 });

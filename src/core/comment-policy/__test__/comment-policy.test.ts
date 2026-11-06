@@ -7,6 +7,7 @@ import { test } from "node:test";
 import {
   attachedIdentifier,
   commentViolationMessage,
+  declaresReason,
   filterCommentTargets,
   findAddedComments,
   isCommentLine,
@@ -21,6 +22,18 @@ test("a line comment is a comment in the language that has that delimiter", () =
   for (const text of ["# x", "  # x"]) {
     assert.equal(isCommentLine(text, "a.py"), true, text);
   }
+});
+
+// why: `shortcut:` declares a reason as the other three do, so a deferral with its ceiling passes. The bare marker
+// with nothing after the colon is still refused: a declared word with no reason is narration in disguise.
+test("shortcut: declares a reason in the same way as why:, hazard: and invariant:", () => {
+  for (const text of ["# shortcut: limite, quando evoluir", "// shortcut: sem DV, antes de produção"]) {
+    assert.equal(declaresReason(text), true, text);
+  }
+  for (const text of ["# shortcut:", "# shortcut"]) {
+    assert.equal(declaresReason(text), false, text);
+  }
+  assert.equal(isCommentLine("# shortcut: x, y", "a.py"), true);
 });
 
 // why: the old signature answered from a union of every delimiter the harness had heard of, which is what made

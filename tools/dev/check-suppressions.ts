@@ -23,7 +23,7 @@ const DIRECTIVE_PATTERN =
  * invariant: the words this project already requires on any comment that stays. A suppression is a comment that
  * survives review, so it answers the same question — see `comment-policy.service.ts`.
  */
-export const DECLARED_PREFIXES = ["why:", "hazard:", "invariant:"] as const;
+export const DECLARED_PREFIXES = ["why:", "hazard:", "invariant:", "shortcut:"] as const;
 
 const MIN_REASON_WORDS = 4;
 

@@ -48,10 +48,12 @@ const GENERATED_PRAGMA = /^@generated\b/i;
 const GENERATED_NEAR_START = /^.{0,20}?\bgenerat\w*\b/i;
 const GENERATED_DO_NOT_EDIT = /\bgenerat\w*\b.{0,20}\bdo[\s-]?not[\s-]?edit\b/i;
 const COMMENT_PREFIX = /^\s*(?:\/\/|\/\*|\*|#)\s*/;
-const DECLARED_REASON = /^\s*(?:\/\/|\/\*|\*|#)\s*(?:why|hazard|invariant):\s*\S/i;
+// why: `shortcut:` is a declared reason too — a deferral the author chose, with its ceiling and upgrade trigger
+// (`shortcut: <limite>, <quando evoluir>`). It is the same word the ponytail skill uses for the same purpose.
+const DECLARED_REASON = /^\s*(?:\/\/|\/\*|\*|#)\s*(?:why|hazard|invariant|shortcut):\s*\S/i;
 const CLOSER_OR_CONTINUATION = /^\s*(?:\*\/|\*|\/\/)/;
 
-export const COMMENT_MARKERS = ["why:", "hazard:", "invariant:"] as const;
+export const COMMENT_MARKERS = ["why:", "hazard:", "invariant:", "shortcut:"] as const;
 
 /**
  * why: a codegen banner ("Code generated ... DO NOT EDIT", Phabricator's `@generated`) is not agent

@@ -2,7 +2,7 @@ import type { ProviderCapabilities } from "../../contracts/index.ts";
 
 /**
  * invariant: every `true` here was observed against agy 1.2.16, and everything not observed is `false` — the
- * public documentation disagrees with the binary, so it is not evidence ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ * public documentation disagrees with the binary, so it is not evidence ([/decisions/ad-147.md](/decisions/ad-147.md)).
  */
 export function antigravityCapabilities(): ProviderCapabilities {
   return {

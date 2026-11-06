@@ -36,7 +36,7 @@ type ProviderPort = {
 - `wiring` — describes which hooks this provider needs registered, and where.
 - `wiringTargets` — every file this provider reads its hook registration from, for the floor's `wiring-tamper`
   rule; given the project, a host with a workspace-level hooks file names that too
-  ([/decisions/ad-146.md](/decisions/ad-146.md)).
+  ([/decisions/ad-147.md](/decisions/ad-147.md)).
 - `lessonsView` — writes the durable lessons view this host reads, or returns `null` when it has none.
 
 ## Registered providers

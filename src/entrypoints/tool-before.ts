@@ -5,7 +5,7 @@ import { coreFacade } from "../core/index.ts";
 import type { AddedLine } from "../platform/git.ts";
 import { diffProposedAgainstDisk, diffTwoStrings, localRepoRemote } from "../platform/git.ts";
 import { normalizeSeparators } from "../platform/sanitize.ts";
-import type { Handler, HandlerContext } from "./run.ts";
+import type { Handler, HandlerContext, PausedHandler } from "./run.ts";
 import { main } from "./run.ts";
 import { shipGateVerdict } from "./ship-gate.ts";
 import {
@@ -321,6 +321,17 @@ async function recordShellCwd(event: HarnessEvent): Promise<void> {
   });
 }
 
+export const floorVerdict: PausedHandler = (event, protectedPaths) =>
+  coreFacade.floor.evaluateFloor({
+    projectDir: event.projectDir,
+    toolName: event.toolName,
+    filePath: filePathOf(event),
+    command: event.command,
+    isReadEvent: event.event === "read.before",
+    protectedPaths,
+    commandCwd: event.commandCwd,
+  });
+
 export const toolBeforeHandler: Handler = async (
   event: HarnessEvent,
   ctx: HandlerContext,
@@ -331,15 +342,7 @@ export const toolBeforeHandler: Handler = async (
 
   // invariant: the floor runs first and reads no policy, so no config value and no agent edit can
   // reach a decision before it.
-  const floor = coreFacade.floor.evaluateFloor({
-    projectDir: event.projectDir,
-    toolName: event.toolName,
-    filePath: filePathOf(event),
-    command: event.command,
-    isReadEvent: event.event === "read.before",
-    protectedPaths: ctx.protectedPaths,
-    commandCwd: event.commandCwd,
-  });
+  const floor = floorVerdict(event, ctx.protectedPaths);
   if (floor.kind !== "allow") {
     // invariant: one rail owns the record of every shell decision. The floor short-circuits before the shell
     // rail runs, so without this a floor denial of a shell command was recorded by nothing at all — and the
@@ -442,5 +445,5 @@ export const toolBeforeHandler: Handler = async (
 };
 
 if (import.meta.main) {
-  await main(toolBeforeHandler);
+  await main(toolBeforeHandler, floorVerdict);
 }

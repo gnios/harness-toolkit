@@ -51,8 +51,44 @@ a green light nobody earned. So a silent harness shows up as a healthy-looking s
 tlc harness doctor
 ```
 
-There is deliberately no switch that turns the harness off. `tlc harness pause` disables the stop checks; the floor
-and the action-time rails keep running, because a limit an agent can turn off is not a limit.
+`tlc harness pause` is the operator's circuit breaker: every hook steps aside without reading policy or writing
+state, and only the floor keeps running, because a limit an agent can turn off is not a limit. A pause flag that
+appears without the CLI is a policy change, not a pause, and is ignored.
+
+## The host says a hook returned no output
+
+Every hook invocation leaves two lines in `~/.tlc/harness/state/hook-trace.jsonl`: `start`, written by the launcher
+before the handler runs, and `end`, with the duration, exit status, signal and the verdict it printed. Each line
+carries the host's `tool_use_id`, `generation_id` and `conversation_id`, never the tool input, so a refusal the host
+reports can be matched to the invocation that produced it:
+
+- no `start` for that tool call: the host never ran the launcher, or it died before its first line;
+- a `start` with no `end`: the process was killed mid-run, usually by the host's own timeout;
+- an `end` with a verdict: the harness answered, and the host discarded it.
+
+The file rotates to `hook-trace.jsonl.1` at 5 MB.
+
+Measured on Cursor 3.25 with the trace on: in every one of 46 refusals reported as "returned no output", the
+matching invocation printed `{"permission":"allow"}` and exited 0. The verdict reached the host and was lost there,
+so nothing in the harness can make it arrive; the trace is the evidence to attach to a report to Cursor.
+
+## A push is refused: no passing run is recorded for the commit being shipped
+
+The push battery reads a verdict recorded for the commit's tree; it does not run the suite inside the hook. Run
+`tlc harness verify` in the shell and retry. Give that command a timeout long enough for the whole suite, or run it
+in the background and wait — Cursor's agent shell gives up on a command after about 30 seconds by default. A new
+commit after the run needs a new run. A gate that rewrites files (a formatter) is not recorded: review what it
+changed and run `verify` again.
+
+`ship-gate-uncommitted` means the only verdict there is was recorded over uncommitted changes, so it describes a
+tree that is not the one being pushed. Commit, stash or gitignore the files the message names, then run `verify`.
+
+## Harness state files stay bounded
+
+Every `.jsonl` the harness appends to under the state directory — `audit`, `debug`, `obs`, rule observations, the
+ship ledger — rotates to `<name>.jsonl.1` at 50 MB, keeping one older generation. A file that grew without limit
+before this rotates on its next write, and the old generation is discarded at the rotation after that. Session
+rollups older than `obs.retentionDays` are deleted at session start.
 
 ## Node vs Bun
 
@@ -135,8 +171,17 @@ tlc harness handoff --json   # same, for a script
 ```
 
 Proven readers on the policy surface: `cat`, `head`, `tail`, `less`, `more`, `grep`, `rg`, `jq`, `ls`, `stat`,
-`file`, `wc`, `cmp`, `diff`, `od`, `xxd`, `strings`, `md5sum`, `sha256sum`, `echo`, `printf`, `test`, `[`, and
-`git show|diff|log|status|ls-files|cat-file|blame`.
+`file`, `wc`, `cmp`, `diff`, `od`, `xxd`, `strings`, `md5sum`, `sha256sum`, `echo`, `printf`, `test`, `[`, `cd`,
+`find` without an action, and `git` with `blame`, `cat-file`, `check-ignore`, `count-objects`, `describe`, `diff`,
+`for-each-ref`, `grep`, `log`, `ls-files`, `ls-tree`, `merge-base`, `rev-list`, `rev-parse`, `shortlog`, `show`,
+`show-ref` or `status` — also through `git -C <dir>`, `--git-dir` and `--work-tree`. A shell keyword in front
+(`do`, `then`, `if`, `while`, …) does not hide the verb, so a loop body that only reads is allowed.
+
+Still denied on purpose: `git -c …` (a config value such as `core.pager` runs a program), `--output` and `-O` on
+any git reader (they write a file or start one), `find` with `-delete`, `-exec*`, `-ok*`, `-fprint*` or `-fls`, a
+`for` list that names the surface, and an assignment that stores a surface path — the variable would carry the path
+into a later `rm $f` the gate cannot see. After `cd`, a relative path is judged against both the starting directory
+and every place `cd` went, so `cd` can never make a write look harmless.
 
 `awk` and `sort` are **not** readers, on purpose — `awk '{print > f}'` and `sort -o f` write a file the head verb
 never reveals. A redirect onto the surface is denied whatever the verb, so `test -f x > config.json` still fails.

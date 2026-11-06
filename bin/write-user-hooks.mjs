@@ -61,7 +61,7 @@ export function applyCursorWiring(wiring, { force = false } = {}) {
 
 // hazard: this was two-way, and every strategy that was not `replace` fell through to the Claude merge — so a
 // third host's file would have been rewritten into another host's schema on the next update. Each strategy names
-// the writer that understands it ([/decisions/ad-146.md](/decisions/ad-146.md)).
+// the writer that understands it ([/decisions/ad-147.md](/decisions/ad-147.md)).
 function mergeWith(wiring) {
   if (wiring.strategy === "named-merge") {
     const result = applyAntigravityWiring(wiring.target, wiring.entries);

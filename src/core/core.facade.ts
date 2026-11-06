@@ -57,6 +57,12 @@ import { cachedVerdict, computeInputsHash, isCacheHit } from "./gate/gate.inputs
 import { describeHolder, GATE_LOCK_WAIT_MS, GateLockTimeoutError, withGateLock } from "./gate/gate.lock.ts";
 import { gapsFromArtifact } from "./gate/gate.service.ts";
 import {
+  findShipVerdict,
+  lastShipVerdictFor,
+  recordShipVerdict,
+  VERIFY_SOURCE,
+} from "./gate/gate.verdicts.ts";
+import {
   clearStuckSignals,
   handoffInjectable,
   handoffSessionPath,
@@ -146,6 +152,7 @@ import {
   resolveProjectSyncMode,
 } from "./policy/policy.loader.ts";
 import { operatorBootstrapLines } from "./policy/policy.operator.ts";
+import { isPaused, pauseFlagPath } from "./policy/policy.pause.ts";
 import { isOperatorMode, OPERATOR_MODES } from "./policy/policy.posture.ts";
 import { activeRails } from "./policy/policy.rails.ts";
 import { pruneShadowed, shadowedKeys, typeMismatches, unknownKeys } from "./policy/policy.shadow.ts";
@@ -316,6 +323,10 @@ export const coreFacade = {
     isRecipeRunner,
     isCommandResolutionFailure,
     filesFromOutput,
+    findShipVerdict,
+    lastShipVerdictFor,
+    recordShipVerdict,
+    VERIFY_SOURCE,
   },
   stagnation: {
     computeFingerprint,
@@ -438,6 +449,8 @@ export const coreFacade = {
     acceptPolicySources,
     divergedPaths,
     allDivergedPaths,
+    isPaused,
+    pauseFlagPath,
     activeRails,
     operatorBootstrapLines,
     loadPolicy,

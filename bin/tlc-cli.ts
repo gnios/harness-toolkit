@@ -116,7 +116,7 @@ export function statusScreen(root: string): Screen {
           },
           {
             label: "gates",
-            value: report.gatesPaused ? "PAUSED — stop checks disabled" : "active",
+            value: report.gatesPaused ? "PAUSED — every hook steps aside; only the floor runs" : "active",
             level: report.gatesPaused ? "warn" : "ok",
           },
         ],
@@ -185,13 +185,13 @@ export function setPaused(root: string, on: boolean): string {
   if (on) {
     writeFileSync(path, "");
     coreFacade.policy.refreshPolicyBaselines(root);
-    return "gates PAUSED — stop checks disabled until `tlc harness resume`";
+    return "harness PAUSED — every hook steps aside (only the floor still runs) until `tlc harness resume`";
   }
   if (existsSync(path)) {
     rmSync(path);
   }
   coreFacade.policy.refreshPolicyBaselines(root);
-  return "gates ACTIVE again";
+  return "harness ACTIVE again";
 }
 
 /**
@@ -881,6 +881,7 @@ QUICK
   tlc harness uninstall            print what would be undone; --yes applies it, --purge includes state
   tlc harness build                compile dist/ for Node
   tlc harness test                 run the full local gate
+  tlc harness verify               run lint/tests on this tree; push and PR read the recorded verdict
   tlc harness help <topic>         documentation
 
 TOPICS
@@ -1203,6 +1204,8 @@ export function route(args: string[]): Action {
       return { kind: "version" };
     case "test":
       return { kind: "test" };
+    case "verify":
+      return { kind: "entry", entry: "verify", args: args.slice(1) };
     case "grind":
     case "g": {
       const arg = (args[1] ?? "on").toLowerCase();
@@ -1661,7 +1664,7 @@ async function main(argv: string[]): Promise<void> {
   if (group !== "harness") {
     console.error(`unknown: ${argv[0] ?? ""}`);
     console.error(
-      "usage: tlc harness <status|doctor|help|grind|pause|resume|reset|mode|obs|prices|lessons|init|update|test|build>",
+      "usage: tlc harness <status|doctor|help|grind|pause|resume|reset|mode|obs|prices|lessons|init|update|test|verify|build>",
     );
     process.exit(1);
   }

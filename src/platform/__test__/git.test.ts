@@ -1,20 +1,34 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, test } from "node:test";
 import {
   diffProposedAgainstDisk,
   filterCodeTargets,
   filterTestTargets,
   gitRootOf,
+  headTreeId,
+  linkedWorktreeMainRoot,
   listAddedLines,
   listChangedRepoFiles,
   listCommitFileSets,
   listTrackedFiles,
   localRepoRemote,
   parseOwnerRepo,
+  workingTreeId,
 } from "../git.ts";
 
 function git(cwd: string, args: string[]): void {
@@ -585,5 +599,177 @@ describe("gitRootOf", () => {
 
     git(main, ["worktree", "remove", "--force", worktree]);
     rmSync(main, { recursive: true, force: true });
+  });
+});
+
+describe("linkedWorktreeMainRoot", () => {
+  test("names the main checkout of a linked worktree", () => {
+    const main = initRepo();
+    const linked = join(mkdtempSync(join(tmpdir(), "git-linked-")), "wt");
+    try {
+      writeFileSync(join(main, "a.txt"), "a\n");
+      git(main, ["add", "a.txt"]);
+      git(main, ["commit", "-q", "-m", "init"]);
+      git(main, ["worktree", "add", "-q", linked]);
+      const found = linkedWorktreeMainRoot(linked);
+      assert.ok(found);
+      assert.equal(realpathSync.native(found), realpathSync.native(main));
+    } finally {
+      rmSync(main, { recursive: true, force: true });
+      rmSync(dirname(linked), { recursive: true, force: true });
+    }
+  });
+
+  test("is null for a main checkout and for a directory outside git", () => {
+    const main = initRepo();
+    const plain = mkdtempSync(join(tmpdir(), "no-git-"));
+    try {
+      assert.equal(linkedWorktreeMainRoot(main), null);
+      assert.equal(linkedWorktreeMainRoot(plain), null);
+    } finally {
+      rmSync(main, { recursive: true, force: true });
+      rmSync(plain, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("workingTreeId", () => {
+  function committedRepo(): string {
+    const dir = initRepo();
+    writeFileSync(join(dir, ".gitignore"), "build/\n");
+    writeFileSync(join(dir, "a.txt"), "aaa\n");
+    git(dir, ["add", "."]);
+    git(dir, ["commit", "-q", "-m", "init"]);
+    return dir;
+  }
+
+  function headTree(dir: string): string {
+    return execFileSync("git", ["rev-parse", "HEAD^{tree}"], { cwd: dir, encoding: "utf8" }).trim();
+  }
+
+  function objectCount(dir: string): string {
+    return execFileSync("git", ["count-objects", "-v"], { cwd: dir, encoding: "utf8" });
+  }
+
+  test("a clean checkout is identified by the tree of HEAD", async () => {
+    const dir = committedRepo();
+    try {
+      assert.equal(await workingTreeId(dir), headTree(dir));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("an edit changes the id, and committing that edit keeps it", async () => {
+    const dir = committedRepo();
+    try {
+      writeFileSync(join(dir, "a.txt"), "changed\n");
+      const dirty = await workingTreeId(dir);
+      assert.notEqual(dirty, headTree(dir));
+      git(dir, ["commit", "-q", "-am", "edit"]);
+      assert.equal(dirty, headTree(dir));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a same-size edit inside the index's own timestamp is still seen", async () => {
+    const dir = committedRepo();
+    try {
+      git(dir, ["config", "core.checkStat", "minimal"]);
+      git(dir, ["config", "core.trustctime", "false"]);
+      const file = join(dir, "a.txt");
+      const index = join(dir, ".git", "index");
+      const stamp = Math.floor(statSync(index).mtimeMs / 1000) - 10;
+      utimesSync(file, stamp, stamp);
+      git(dir, ["update-index", "--really-refresh"]);
+      writeFileSync(file, "bbb\n");
+      utimesSync(file, stamp, stamp);
+      utimesSync(index, stamp, stamp);
+      assert.notEqual(await workingTreeId(dir), headTree(dir));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("untracked files count and ignored files do not", async () => {
+    const dir = committedRepo();
+    try {
+      mkdirSync(join(dir, "build"));
+      writeFileSync(join(dir, "build", "out.js"), "x\n");
+      assert.equal(await workingTreeId(dir), headTree(dir));
+      writeFileSync(join(dir, "new.txt"), "n\n");
+      assert.notEqual(await workingTreeId(dir), headTree(dir));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("computing the id writes nothing into the repository", async () => {
+    const dir = committedRepo();
+    try {
+      writeFileSync(join(dir, "a.txt"), "never added\n");
+      writeFileSync(join(dir, "new.txt"), "never added either\n");
+      const before = objectCount(dir);
+      const index = readFileSync(join(dir, ".git", "index"));
+      await workingTreeId(dir);
+      assert.equal(objectCount(dir), before);
+      assert.deepEqual(readFileSync(join(dir, ".git", "index")), index);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("an untracked file that cannot be read is skipped instead of losing the id", {
+    skip: process.platform === "win32" || process.getuid?.() === 0,
+  }, async () => {
+    const dir = committedRepo();
+    try {
+      const locked = join(dir, "locked.txt");
+      writeFileSync(locked, "secret\n");
+      chmodSync(locked, 0o000);
+      assert.equal(await workingTreeId(dir), headTree(dir));
+    } finally {
+      chmodSync(join(dir, "locked.txt"), 0o600);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("the harness's own files never change the id", async () => {
+    const dir = committedRepo();
+    try {
+      const before = await workingTreeId(dir);
+      mkdirSync(join(dir, ".tlc", "harness"), { recursive: true });
+      writeFileSync(join(dir, ".tlc", "harness", "lessons.md"), "rewritten by the harness\n");
+      assert.equal(await workingTreeId(dir), before);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("with harness files committed, a clean checkout's id equals the id of HEAD", async () => {
+    const dir = committedRepo();
+    try {
+      mkdirSync(join(dir, ".tlc", "harness"), { recursive: true });
+      writeFileSync(join(dir, ".tlc", "harness", "config.json"), "{}\n");
+      git(dir, ["add", "."]);
+      git(dir, ["commit", "-q", "-m", "harness"]);
+      const head = await headTreeId(dir);
+      assert.ok(head);
+      assert.equal(await workingTreeId(dir), head);
+      writeFileSync(join(dir, "a.txt"), "edited\n");
+      assert.notEqual(await workingTreeId(dir), head);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("outside a repository there is no id", async () => {
+    const plain = mkdtempSync(join(tmpdir(), "no-git-"));
+    try {
+      assert.equal(await workingTreeId(plain), null);
+    } finally {
+      rmSync(plain, { recursive: true, force: true });
+    }
   });
 });

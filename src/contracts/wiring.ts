@@ -19,7 +19,7 @@ export type WiringEntry = {
  * - `replace` — the file is ours alone, written whole.
  * - `merge` — ours are entries inside per-event lists the operator and other tools share.
  * - `named-merge` — the file is a map of named hook sets and ours is one whole set under a name of its own;
- *   every other set is left exactly as it was ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ *   every other set is left exactly as it was ([/decisions/ad-147.md](/decisions/ad-147.md)).
  */
 export type ProviderWiring = {
   target: string;

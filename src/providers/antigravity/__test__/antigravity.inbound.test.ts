@@ -257,7 +257,7 @@ test("PostToolUse run_command with an empty error fans out to shell.after", () =
 /**
  * hazard: reading the exit code from the transcript made every successful command unproven, because the step is
  * never there yet — measured: a passing `ruff format --check` was then reported missing at push, and a context
- * rule proven by a command could never be satisfied ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ * rule proven by a command could never be satisfied ([/decisions/ad-147.md](/decisions/ad-147.md)).
  */
 test("an empty-error run_command carries its command, whatever the transcript holds at that moment", () => {
   asHook("PostToolUse");

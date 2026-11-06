@@ -73,7 +73,7 @@ function ruleOf(decision: Decision): string | undefined {
 /**
  * The defect this pins: agy has no session-end event, so a claim taken by one `agy -p` run outlived it by ten
  * minutes and the next run's write to the same file was refused as `edit-collision` — three times in a row,
- * measured against the real binary ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ * measured against the real binary ([/decisions/ad-147.md](/decisions/ad-147.md)).
  */
 test("an agy stop that lets the agent stop releases its claims, so the next run may write the same file", async () => {
   const root = initRepo();

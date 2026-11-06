@@ -300,7 +300,7 @@ describe("provider dispatch loop (skip-when-absent, independent-failure semantic
 /**
  * hazard: dispatch was two-way on `strategy`, and anything not `replace` went to the Claude merge. A third host's
  * file reaching that branch would be rewritten into another host's schema on the next `tlc harness update` — and
- * agy's global hooks file already holds the Orca hook ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ * agy's global hooks file already holds the Orca hook ([/decisions/ad-147.md](/decisions/ad-147.md)).
  */
 describe("named-merge dispatch (antigravity)", () => {
   const orca = {

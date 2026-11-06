@@ -20,7 +20,7 @@ export function antigravityRender(decision: Decision, _event: HarnessEvent): Ren
       return refuse(decision.reason);
     // hazard: `ask` is unverified here, and degrade already turns it into a deny. It still reaches render when
     // degrade produces it — a rewrite this host cannot apply becomes an ask — so the floor under that path is a
-    // refusal that carries the question, never a silent pass ([/decisions/ad-146.md](/decisions/ad-146.md)).
+    // refusal that carries the question, never a silent pass ([/decisions/ad-147.md](/decisions/ad-147.md)).
     case "ask":
       return refuse(decision.reason);
     case "rewriteInput":

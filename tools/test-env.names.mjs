@@ -26,7 +26,7 @@ export const RUNTIME_SCOPED_ENV = ["TLC_ORIGIN", "TLC_HOME_FROM_ENV"];
  * launched the suite instead of the one it declares.
  *
  * why its own list: it names neither a project nor a runtime copy, and a list whose invariant a member breaks is
- * how two behaviours end up sharing one ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ * how two behaviours end up sharing one ([/decisions/ad-147.md](/decisions/ad-147.md)).
  */
 export const HOOK_SCOPED_ENV = ["TLC_AGY_EVENT"];
 

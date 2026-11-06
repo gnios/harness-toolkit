@@ -264,7 +264,7 @@ function planCursor(items: PlanItem[], hooksPath: string): void {
 }
 
 // invariant: the file is a map of named hook sets, and only ours leaves. Another tool's set — the Orca hook lives
-// here on the machine this was built against — is that tool's to remove ([/decisions/ad-146.md](/decisions/ad-146.md)).
+// here on the machine this was built against — is that tool's to remove ([/decisions/ad-147.md](/decisions/ad-147.md)).
 function planAntigravity(items: PlanItem[], hooksPath: string): void {
   const result = unmergeAntigravityHooks(existsSync(hooksPath) ? readFileSync(hooksPath, "utf8") : null);
   switch (result.kind) {

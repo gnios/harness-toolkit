@@ -17,7 +17,7 @@ export const ANTIGRAVITY_HOOK_SET = "tlc-harness";
 type EntrySpec = { hookEvent: string; handler: string; timeoutSeconds: number; matcher?: string };
 
 // why these four: the events whose payload and response were observed. PostInvocation is left out — it is
-// byte-identical to PreInvocation and has nothing to map to ([/decisions/ad-146.md](/decisions/ad-146.md)).
+// byte-identical to PreInvocation and has nothing to map to ([/decisions/ad-147.md](/decisions/ad-147.md)).
 const ENTRY_SPECS: readonly EntrySpec[] = [
   { hookEvent: "PreInvocation", handler: "prompt-submit", timeoutSeconds: 5 },
   { hookEvent: "PreToolUse", handler: "tool-before", timeoutSeconds: 10, matcher: "*" },

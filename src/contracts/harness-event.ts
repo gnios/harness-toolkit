@@ -63,7 +63,7 @@ export type HarnessEvent = {
    * The directory one specific command runs in, when the host passes it as an argument of the call — so the agent
    * chooses it per command. Relative words in that command resolve there, not at `projectDir`, or a call naming
    * another directory reaches files the floor resolved somewhere else. Absent on hosts whose working directory is
-   * session state rather than a call argument ([/decisions/ad-146.md](/decisions/ad-146.md)).
+   * session state rather than a call argument ([/decisions/ad-147.md](/decisions/ad-147.md)).
    */
   commandCwd?: string;
   // hazard: the `spawn*` pair describes the child of a spawn; the unprefixed fields describe the
@@ -86,7 +86,7 @@ export type HarnessEvent = {
    * Set on a `stop` from a host that never reports the end of a session. Its session-scoped state — the file claims
    * other sessions are asked about — would otherwise outlive the session by the full stale window, refusing the
    * next session's writes to the same files. Absent means the host reports its session end on its own
-   * ([/decisions/ad-146.md](/decisions/ad-146.md)).
+   * ([/decisions/ad-147.md](/decisions/ad-147.md)).
    */
   sessionEndUnreported?: boolean;
   /** Provider's own permission posture, when it exposes one. Absent means unknown, not permissive. */

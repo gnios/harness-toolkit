@@ -130,10 +130,48 @@ A gate whose command never ran — exit 127, or a runner that could not resolve 
 `config`, not `verification`. The distinction matters: the verification follow-up tells the agent to fix the
 findings without deleting tests, which on a malformed command sends it to edit healthy code.
 
+## Lint and tests before push
+
+`push`, `gh pr create` and `gh pr merge` are refused unless the configured lint, test and (with `docs.severity:
+deny`) docs commands have passed **on the commit being shipped** — the tree of `HEAD`, the same thing CI would test.
+The hook never runs those commands itself: a real suite takes minutes, and both hosts kill a pre-tool hook long
+before that — Cursor refuses the tool when its hook is killed, so an inline suite meant every push was refused,
+green or not.
+
+What a ship carries is what decides whether gates are owed: the code the turn changed, plus every code change on
+the branch that is not on the remote's default branch yet. Code written in an earlier turn is therefore verified
+before it ships, an already pushed branch still needs its commit verified before a PR opens, and a `git push` with
+nothing new to send owes nothing. A command that commits and ships in one go — `git commit -am … && git push` —
+ships the working tree it is about to commit, so that tree is the one that needs the verdict.
+
+The hook looks up a recorded verdict, keyed by the gate, its command and the git id of a tree, and answers in
+milliseconds:
+
+- a passing verdict for the commit lets the push through;
+- a failing one refuses it with the recorded output;
+- a verdict recorded over uncommitted changes refuses it and names the files — what was tested is not what ships —
+  until they are committed, stashed or ignored;
+- no verdict refuses it and tells the agent to run `tlc harness verify`.
+
+`tlc harness verify` runs the commands in the agent's own shell, where no hook timeout applies, and records the
+result. A `stop` gate run records one too, so a turn whose gates already passed usually pushes without the extra
+step. A verdict recorded with a clean tree covers the push of that commit even when scratch files appear later,
+and a verdict recorded before a commit covers the commit made from that exact tree. The harness's own directory is
+left out of every tree id, so its lessons and state never invalidate a verdict. Linked worktrees share one record
+with their main checkout. A gate that rewrites files while it runs is not recorded, because its verdict describes a
+tree that no longer exists.
+
+The `stop` grind follows the same rule. It reuses a verdict recorded for the current tree by this session or by
+`tlc harness verify`, and otherwise runs the gate inline within a 90-second budget, ending the whole process tree if
+it overruns. A suite that does not fit is handed back: the turn continues with an instruction to run `tlc harness
+verify`, and the overrun is remembered as an estimate — never as a verdict — so the next stop does not start it again.
+
 ## pause / resume
 
-`tlc harness pause` disables stop checks (grind + ship challenge). Use when exploring or mid-refactor.
-`tlc harness resume` turns them back on.
+`tlc harness pause` is the circuit breaker: every hook steps aside and answers at once, reading no policy and
+writing no state. Only the floor still runs, so a paused session still cannot rewrite the policy it will resume
+under. Pausing a repository also pauses the agents working in its linked worktrees. `tlc harness resume` turns
+the harness back on.
 
 Run both from your own terminal. Inside an agent session they are denied by the floor rule
 `policy-surface-write`: policy is the operator's to change, and a stop check the agent can switch off is not a

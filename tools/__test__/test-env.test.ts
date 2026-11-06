@@ -40,7 +40,7 @@ test("no project-identifying variable reaches a test", () => {
 /**
  * hazard: the agy wiring names the event in the hook's environment, and every process the hook starts inherits
  * it — including a gate that runs this suite. Left set, the adapter's tests would read the event of whichever hook
- * launched them instead of the one each test declares ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ * launched them instead of the one each test declares ([/decisions/ad-147.md](/decisions/ad-147.md)).
  */
 test("no variable naming a hook's event reaches a test", () => {
   assert.ok(HOOK_SCOPED_ENV.includes(ANTIGRAVITY_EVENT_ENV), `${ANTIGRAVITY_EVENT_ENV} is not scrubbed`);

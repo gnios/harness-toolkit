@@ -8,7 +8,7 @@ import { sanitizeSegment } from "../../platform/sanitize.ts";
  * PostInvocation payloads are byte-identical. The port hands `toEvent` the payload and nothing else, so the
  * registration has to put the name somewhere the adapter can read without the entrypoint, `run.ts` or core
  * learning that this host exists. The process environment is that place; it is the same channel the Orca hook
- * on this host already uses (`ORCA_ANTIGRAVITY_EVENT='Stop' /bin/sh …`) ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ * on this host already uses (`ORCA_ANTIGRAVITY_EVENT='Stop' /bin/sh …`) ([/decisions/ad-147.md](/decisions/ad-147.md)).
  */
 export const ANTIGRAVITY_EVENT_ENV = "TLC_AGY_EVENT";
 
@@ -49,7 +49,7 @@ export const POST_TOOL_USE_FAN_OUT: readonly ToolNameFanOutRule[] = [
  *
  * hazard: `replace_file_content` was never captured. Its name and its `TargetFile` field are assumed from the
  * write tool's shape; until a payload is observed, an edit through a differently named tool reaches only the
- * generic `tool.before` path ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ * generic `tool.before` path ([/decisions/ad-147.md](/decisions/ad-147.md)).
  */
 const WRITE_TOOL_NAMES: Record<string, string> = {
   write_to_file: "Write",
@@ -112,7 +112,7 @@ function toolCallOf(raw: Record<string, unknown>): ToolCall {
  * `error: ""`, and the transcript holds no line for the step until every hook has returned. So a red command reads
  * as a success here, and a `command(…)` proof can be satisfied by one; the stop-time gates are what check the
  * result. Treating the unreadable outcome as unproven was tried and made no command ever count
- * ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ * ([/decisions/ad-147.md](/decisions/ad-147.md)).
  */
 function failed(raw: Record<string, unknown>): boolean {
   const error = asString(raw.error);
@@ -126,7 +126,7 @@ function failed(raw: Record<string, unknown>): boolean {
  *
  * invariant: only a numeric `0` is the boundary. A payload without the counter is ignored rather than guessed —
  * a missed boundary falls back to diffing against HEAD, the existing safe default, while a false one corrupts the
- * turn ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ * turn ([/decisions/ad-147.md](/decisions/ad-147.md)).
  */
 function isFirstInvocation(raw: Record<string, unknown>): boolean {
   return raw.invocationNum === 0;
@@ -167,7 +167,7 @@ function harnessToolName(call: ToolCall): string | undefined {
  * hazard: only two edit tools were ever named, and an unnamed one carrying `TargetFile` reached the floor as an
  * unknown tool — measured: `multi_replace_file_content` on the global hooks file was allowed. A tool that names a
  * file to target is treated as writing it; failing closed costs a read-shaped tool an edit-collision ask at worst
- * ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ * ([/decisions/ad-147.md](/decisions/ad-147.md)).
  */
 function namesTargetFile(call: ToolCall): boolean {
   return typeof call.args?.TargetFile === "string";
@@ -200,7 +200,7 @@ function fillShell(event: HarnessEvent, args: Record<string, unknown> | undefine
     event.cwd = cwd;
     // hazard: `Cwd` is an argument of the call, chosen per command. Resolved against the project instead, a
     // relative `> hooks.json` run from the hooks directory was allowed to unregister the harness
-    // ([/decisions/ad-146.md](/decisions/ad-146.md)).
+    // ([/decisions/ad-147.md](/decisions/ad-147.md)).
     event.commandCwd = cwd;
   }
 }
@@ -262,7 +262,7 @@ function fillByKind(event: HarnessEvent, raw: Record<string, unknown>, call: Too
  * Never throws on a malformed payload — returns null instead.
  *
  * hazard: `transcriptPath` is deliberately not surfaced. The only transcript reader the entrypoints have parses
- * another host's format, and it runs whenever a path is present ([/decisions/ad-146.md](/decisions/ad-146.md)).
+ * another host's format, and it runs whenever a path is present ([/decisions/ad-147.md](/decisions/ad-147.md)).
  */
 export function antigravityToEvent(raw: Record<string, unknown>): HarnessEvent | null {
   const hookName = hookNameFor(raw);

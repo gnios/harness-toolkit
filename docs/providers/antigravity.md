@@ -8,7 +8,7 @@ timestamp: "2026-10-04"
 
 # Antigravity provider
 
-Source: `src/providers/antigravity/`. Decision: [/decisions/ad-146.md](/decisions/ad-146.md).
+Source: `src/providers/antigravity/`. Decision: [/decisions/ad-147.md](/decisions/ad-147.md).
 
 Everything below marked **verified** was observed against `agy` 1.2.16 with a hook that captured each payload
 and tried each response. The public documentation disagreed with the binary and is not used as evidence. The
@@ -203,4 +203,4 @@ otherwise, and `not-installed` when `~/.gemini/config/` is absent. `tlc harness 
 ## See also
 
 - [/providers/index.md](/providers/index.md)
-- [/decisions/ad-146.md](/decisions/ad-146.md)
+- [/decisions/ad-147.md](/decisions/ad-147.md)
